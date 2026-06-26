@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PRESET_ICONS, PRESET_COLORS } from "./constants.js";
 
 // ─── 商品画像 ────────────────────────────────────────────────────────
@@ -87,10 +87,20 @@ export function EditCatModal({ cat, onSave, onDelete, onClose }) {
 }
 
 // ─── アイテム追加 ────────────────────────────────────────────────────
-export function AddItemModal({ catId, onAdd, onClose }) {
-  const [d, setD] = useState({ name: "", stock: 1, threshold: 1, unit: "個" });
+export function AddItemModal({ catId, onAdd, onClose, prefill }) {
+  const [d, setD] = useState({
+    name: prefill?.name || "",
+    stock: 1, threshold: 1,
+    unit: prefill?.unit || "個",
+  });
   return <>
     <div className="modal-title">アイテムを追加</div>
+    {prefill && (
+      <div className="scan-result-card">
+        <div className="scan-result-name">{prefill.name}</div>
+        {prefill.brand && <div className="scan-result-sub">{prefill.brand}</div>}
+      </div>
+    )}
     <div className="flabel">アイテム名</div>
     <input className="finput" placeholder="例: シャンプー" value={d.name}
       onChange={e => setD({ ...d, name: e.target.value })} autoFocus />
@@ -150,7 +160,202 @@ export function EditItemModal({ catId, item, onSave, onClose }) {
   </>;
 }
 
-// ─── 購入履歴モーダル（履歴タップで再登録対応）────────────────────────
+// ─── バーコードスキャンモーダル ──────────────────────────────────────
+export function ScanModal({ catId, onItemFound, onClose }) {
+  const scannerRef  = useRef(null);
+  const instanceRef = useRef(null);
+  const [status,  setStatus]  = useState("init"); // init | scanning | found | error
+  const [loading, setLoading] = useState(false);
+  const [result,  setResult]  = useState(null);
+
+  useEffect(() => {
+    let scanner;
+    (async () => {
+      try {
+        const { Html5QrcodeScanner } = await import("html5-qrcode");
+        scanner = new Html5QrcodeScanner(
+          "qr-reader",
+          { fps: 10, qrbox: { width: 250, height: 120 }, supportedScanTypes: [0] },
+          false
+        );
+        instanceRef.current = scanner;
+        scanner.render(
+          async (decodedText) => {
+            scanner.clear();
+            setStatus("found");
+            setLoading(true);
+            await lookupBarcode(decodedText);
+            setLoading(false);
+          },
+          () => {}
+        );
+        setStatus("scanning");
+      } catch {
+        setStatus("error");
+      }
+    })();
+    return () => { try { instanceRef.current?.clear(); } catch {} };
+  }, []);
+
+  const lookupBarcode = async (code) => {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          system: `日本の商品JANコードを検索して、以下のJSON形式のみを返してください。説明文不要。
+{"name":"商品名","brand":"ブランド名","unit":"適切な単位（本/個/枚など）","description":"40文字以内の説明","imageUrl":"画像URL or null"}`,
+          messages: [{ role: "user", content: `JANコード: ${code}` }],
+        }),
+      });
+      const data = await res.json();
+      const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
+      const s = text.indexOf("{"), e = text.lastIndexOf("}");
+      if (s !== -1 && e !== -1) {
+        try { setResult({ ...JSON.parse(text.slice(s, e + 1)), barcode: code }); return; }
+        catch {}
+      }
+    } catch {}
+    setResult({ name: `商品 (${code})`, brand: "", unit: "個", description: "", imageUrl: null, barcode: code });
+  };
+
+  return <>
+    <div className="modal-title">📷 バーコードをスキャン</div>
+    <div className="modal-sub">商品のバーコードにカメラを向けてください</div>
+
+    {status === "scanning" && (
+      <div className="scanner-hint">
+        バーコード（JAN）を枠内に合わせてください<br />
+        <span style={{ fontSize: 10 }}>※ カメラの許可が必要です</span>
+      </div>
+    )}
+
+    <div ref={scannerRef} id="qr-reader" className="scanner-wrap" />
+
+    {loading && <div className="searching">🔍 商品情報を取得中...</div>}
+
+    {result && !loading && (
+      <>
+        <div className="scan-result-card">
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <ProductImage url={result.imageUrl} size={56} />
+            <div>
+              <div className="scan-result-name">{result.name}</div>
+              {result.brand && <div className="scan-result-sub">{result.brand}</div>}
+              {result.description && <div className="scan-result-sub" style={{ marginTop: 4 }}>{result.description}</div>}
+            </div>
+          </div>
+        </div>
+        <button className="btn-primary" onClick={() => onItemFound(catId, result)}>
+          このアイテムを追加する
+        </button>
+        <button className="btn-ghost" style={{ marginTop: 8 }} onClick={() => {
+          setResult(null); setStatus("scanning");
+          setLoading(false);
+          // 再スキャン
+          (async () => {
+            const { Html5QrcodeScanner } = await import("html5-qrcode");
+            const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 120 }, supportedScanTypes: [0] }, false);
+            instanceRef.current = scanner;
+            scanner.render(async (code) => {
+              scanner.clear(); setStatus("found"); setLoading(true);
+              await lookupBarcode(code); setLoading(false);
+            }, () => {});
+          })();
+        }}>
+          もう一度スキャン
+        </button>
+      </>
+    )}
+
+    {status === "error" && (
+      <div className="stats-empty">
+        カメラを起動できませんでした<br />
+        <span style={{ fontSize: 11 }}>ブラウザのカメラ許可を確認してください</span>
+      </div>
+    )}
+
+    <button className="btn-cancel" onClick={onClose}>閉じる</button>
+  </>;
+}
+
+// ─── 消費統計モーダル ────────────────────────────────────────────────
+export function StatsModal({ cats, items, onClose }) {
+  // 過去6ヶ月のラベル生成
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    months.push(`${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  // 全アイテムの usageLogs を月別集計
+  const allItems = cats.flatMap(cat =>
+    (items[cat.id] || []).map(item => ({ ...item, cat }))
+  );
+
+  // usageLogsがあるアイテムだけ表示
+  const statsItems = allItems
+    .map(item => {
+      const monthly = {};
+      months.forEach(m => { monthly[m] = 0; });
+      (item.usageLogs || []).forEach(log => {
+        const d = new Date(log.date);
+        const key = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+        if (monthly[key] !== undefined) monthly[key]++;
+      });
+      const total = Object.values(monthly).reduce((a, b) => a + b, 0);
+      return { ...item, monthly, total };
+    })
+    .filter(i => i.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  const maxVal = Math.max(1, ...statsItems.flatMap(i => Object.values(i.monthly)));
+
+  return <>
+    <div className="modal-title">📊 消費統計</div>
+    <div className="modal-sub">過去6ヶ月の使用回数</div>
+
+    {statsItems.length === 0
+      ? <div className="stats-empty">
+          まだデータがありません<br />
+          <span style={{ fontSize: 11 }}>−ボタンで在庫を減らすと記録されます</span>
+        </div>
+      : statsItems.map(item => (
+        <div key={`${item.cat.id}-${item.id}`} className="stats-card">
+          <div className="stats-item-name">
+            {item.cat.icon} {item.name}
+            <span style={{ fontSize: 11, color: "#A89E94", fontWeight: 400, marginLeft: 8 }}>
+              計{item.total}回
+            </span>
+          </div>
+          {months.map(m => {
+            const val = item.monthly[m];
+            const pct = Math.round(val / maxVal * 100);
+            const label = m.slice(5); // "06" など月だけ
+            return (
+              <div key={m} className="bar-row">
+                <div className="bar-label">{label}月</div>
+                <div className="bar-track">
+                  <div className="bar-fill"
+                    style={{ width: `${pct}%`, background: item.cat.color, minWidth: val > 0 ? 24 : 0 }}>
+                    {val > 0 && <span className="bar-val">{val}</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+    <button className="btn-cancel" style={{ marginTop: 8 }} onClick={onClose}>閉じる</button>
+  </>;
+}
+
+// ─── 購入履歴モーダル ────────────────────────────────────────────────
 export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory }) {
   const hist = item.history || [];
   const fav  = item.favorite;
@@ -161,7 +366,6 @@ export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory })
       在庫: {item.stock}{item.unit} · 購入目安: {item.threshold}{item.unit}以下
     </div>
 
-    {/* お気に入り表示 */}
     {fav && (
       <div style={{ background: "#FFFDF0", border: "1.5px solid #F9E84A", borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
         <ProductImage url={fav.imageUrl} size={40} />
@@ -187,8 +391,7 @@ export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory })
           <span style={{ fontSize: 11 }}>購入した商品を上のボタンで記録できます</span>
         </div>
       : hist.map((h, idx) => (
-        <div key={h.id} className="history-item"
-          onClick={() => onReuseHistory(catId, item, h)}>
+        <div key={h.id} className="history-item" onClick={() => onReuseHistory(catId, item, h)}>
           <ProductImage url={h.imageUrl} size={52} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
@@ -208,7 +411,7 @@ export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory })
   </>;
 }
 
-// ─── 購入記録モーダル（商品検索 + メモ + お気に入り）────────────────
+// ─── 購入記録モーダル ────────────────────────────────────────────────
 export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
   const [query,   setQuery]   = useState(prefill?.name || item.name);
   const [result,  setResult]  = useState(prefill || null);
@@ -246,10 +449,6 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
     setLoading(false);
   };
 
-  const handleRecord = (base) => {
-    onAdd(catId, item.id, { ...base, memo, isFavorite: isFav });
-  };
-
   return <>
     <div className="modal-title">購入商品を記録</div>
     <div className="modal-sub">{item.name} の購入履歴に追加します</div>
@@ -280,13 +479,11 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
         <div className="flabel" style={{ marginTop: 4 }}>メモ（任意）</div>
         <textarea className="ftextarea" placeholder="例: 香り少し強め・詰め替え用"
           value={memo} onChange={e => setMemo(e.target.value)} />
-
         <button className={`btn-fav ${isFav ? "active" : ""}`} onClick={() => setIsFav(v => !v)}>
           {isFav ? "⭐ お気に入りに設定済み" : "☆ お気に入りに設定する"}
         </button>
-
         <button className="btn-primary" style={{ marginTop: 12 }}
-          onClick={() => handleRecord(result)}>
+          onClick={() => onAdd(catId, item.id, { ...result, memo, isFavorite: isFav })}>
           この商品を記録する
         </button>
       </>
@@ -294,7 +491,7 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
 
     {!result && !loading && (
       <button className="btn-ghost"
-        onClick={() => handleRecord({ name: query, brand: "", description: "", imageUrl: null })}>
+        onClick={() => onAdd(catId, item.id, { name: query, brand: "", description: "", imageUrl: null, memo, isFavorite: isFav })}>
         検索せず「{query}」として記録
       </button>
     )}
@@ -311,9 +508,7 @@ export function ShoppingModal({ shopItems, onClose, toast_ }) {
     const text = shopItems.map(i => {
       const fav  = i.favorite;
       const last = i.history?.[0];
-      const rec  = fav
-        ? ` ⭐推奨: ${fav.brand || fav.name}`
-        : last ? ` 前回: ${last.brand || last.name}` : "";
+      const rec  = fav ? ` ⭐推奨: ${fav.brand || fav.name}` : last ? ` 前回: ${last.brand || last.name}` : "";
       return `・${i.name}（残り${i.stock}${i.unit}）${rec}`;
     }).join("\n");
     navigator.clipboard?.writeText(text).then(() => { toast_("コピーしました"); onClose(); });
@@ -331,25 +526,15 @@ export function ShoppingModal({ shopItems, onClose, toast_ }) {
               <div className="shop-dot" style={{ background: item.cat?.color || "#888" }} />
               <div>
                 <div className="shop-name">{item.name}</div>
-                <div className="shop-info">
-                  {item.cat?.icon} {item.cat?.label} · 残り {item.stock}{item.unit}
-                </div>
-                {fav && (
-                  <div className="shop-fav">
-                    ⭐ 推奨: {fav.brand ? `${fav.name}（${fav.brand}）` : fav.name}
-                  </div>
-                )}
-                {!fav && last && (
-                  <div className="shop-last">前回: {last.brand || last.name}</div>
-                )}
+                <div className="shop-info">{item.cat?.icon} {item.cat?.label} · 残り {item.stock}{item.unit}</div>
+                {fav  && <div className="shop-fav">⭐ 推奨: {fav.brand ? `${fav.name}（${fav.brand}）` : fav.name}</div>}
+                {!fav && last && <div className="shop-last">前回: {last.brand || last.name}</div>}
               </div>
             </div>
           );
         })}
     {shopItems.length > 0 && (
-      <button className="btn-primary" style={{ marginTop: 16 }} onClick={copy}>
-        📋 リストをコピー
-      </button>
+      <button className="btn-primary" style={{ marginTop: 16 }} onClick={copy}>📋 リストをコピー</button>
     )}
     <button className="btn-cancel" onClick={onClose}>閉じる</button>
   </>;
@@ -357,10 +542,11 @@ export function ShoppingModal({ shopItems, onClose, toast_ }) {
 
 // ─── モーダルレイヤー ────────────────────────────────────────────────
 export function ModalLayer({
-  modal, setModal, cats,
+  modal, setModal, cats, items,
   addCat, updateCat, deleteCat,
   addItem, updateItem,
   addPurchase, reuseHistory,
+  onScanFound,
   shopItems, toast_,
 }) {
   return (
@@ -369,19 +555,13 @@ export function ModalLayer({
         <div className="modal-handle" />
         {modal.type === "addCat"      && <AddCatModal onAdd={addCat} onClose={() => setModal(null)} />}
         {modal.type === "editCat"     && <EditCatModal cat={modal.cat} onSave={updateCat} onDelete={deleteCat} onClose={() => setModal(null)} />}
-        {modal.type === "addItem"     && <AddItemModal catId={modal.catId} onAdd={addItem} onClose={() => setModal(null)} />}
+        {modal.type === "addItem"     && <AddItemModal catId={modal.catId} onAdd={addItem} onClose={() => setModal(null)} prefill={modal.prefill} />}
         {modal.type === "editItem"    && <EditItemModal catId={modal.catId} item={modal.item} onSave={updateItem} onClose={() => setModal(null)} />}
-        {modal.type === "history"     && (
-          <HistoryModal catId={modal.catId} item={modal.item}
-            setModal={setModal} onClose={() => setModal(null)}
-            onReuseHistory={reuseHistory} />
-        )}
-        {modal.type === "addPurchase" && (
-          <AddPurchaseModal catId={modal.catId} item={modal.item}
-            onAdd={addPurchase} setModal={setModal}
-            prefill={modal.prefill} />
-        )}
+        {modal.type === "history"     && <HistoryModal catId={modal.catId} item={modal.item} setModal={setModal} onClose={() => setModal(null)} onReuseHistory={reuseHistory} />}
+        {modal.type === "addPurchase" && <AddPurchaseModal catId={modal.catId} item={modal.item} onAdd={addPurchase} setModal={setModal} prefill={modal.prefill} />}
         {modal.type === "shopping"    && <ShoppingModal shopItems={shopItems} onClose={() => setModal(null)} toast_={toast_} />}
+        {modal.type === "scan"        && <ScanModal catId={modal.catId} onItemFound={onScanFound} onClose={() => setModal(null)} />}
+        {modal.type === "stats"       && <StatsModal cats={cats} items={items} onClose={() => setModal(null)} />}
       </div>
     </div>
   );
