@@ -10,6 +10,7 @@ body { background: #F7F4EF; }
 .header-right { display: flex; gap: 8px; align-items: center; }
 .add-cat-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 7px 12px; border-radius: 20px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 500; white-space: nowrap; }
 .shop-btn { background: #E8734A; color: white; border: none; width: 38px; height: 38px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; }
+.stats-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); width: 38px; height: 38px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .badge { position: absolute; top: -4px; right: -4px; background: white; color: #E8734A; border-radius: 50%; width: 16px; height: 16px; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -25,7 +26,7 @@ body { background: #F7F4EF; }
 
 /* ── アイテムカード ── */
 .item-card { background: white; border-radius: 14px; padding: 14px 14px 12px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-left: 4px solid #EEE9E2; transition: all 0.2s; cursor: pointer; }
-.item-card.low { border-left-color: #E8734A; background: linear-gradient(135deg, #FFFAF7, white); }
+.item-card.low  { border-left-color: #E8734A; background: linear-gradient(135deg, #FFFAF7, white); }
 .item-card.soon { border-left-color: #D4A843; background: linear-gradient(135deg, #FFFDF0, white); }
 .item-card:active { transform: scale(0.99); }
 .item-main { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; }
@@ -59,18 +60,10 @@ body { background: #F7F4EF; }
 .edit-toggle:hover { border-color: #2D2926; color: #2D2926; }
 .edit-panel { background: white; border-radius: 14px; padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
 .edit-panel-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.btn-add-item    { flex: 2; padding: 12px; background: #2D2926; color: white; border: none; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 700; }
-.btn-cat-settings{ flex: 1; padding: 12px; background: #F7F4EF; color: #2D2926; border: none; border-radius: 10px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 500; }
+.btn-add-item     { flex: 2; padding: 12px; background: #2D2926; color: white; border: none; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 700; }
+.btn-cat-settings { flex: 1; padding: 12px; background: #F7F4EF; color: #2D2926; border: none; border-radius: 10px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 500; }
+.btn-scan         { flex: 1; padding: 12px; background: #4A90D9; color: white; border: none; border-radius: 10px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 700; }
 .btn-done { width: 100%; padding: 11px; background: white; border: 1.5px solid #EEE9E2; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; color: #A89E94; }
-
-/* ── そろそろ切れるセクション ── */
-.soon-section { background: white; border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
-.soon-header { font-size: 13px; font-weight: 700; color: #D4A843; margin-bottom: 10px; }
-.soon-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F7F4EF; }
-.soon-item:last-child { border-bottom: none; }
-.soon-item-name { font-size: 14px; font-weight: 600; }
-.soon-item-days { font-size: 12px; color: #D4A843; font-weight: 700; }
-.soon-item-cat  { font-size: 11px; color: #A89E94; margin-top: 2px; }
 
 /* ── モーダル共通 ── */
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: flex-end; justify-content: center; z-index: 100; backdrop-filter: blur(3px); }
@@ -101,6 +94,13 @@ body { background: #F7F4EF; }
 .btn-ghost   { width: 100%; padding: 12px; background: transparent; color: #A89E94; border: 1.5px dashed #D4CEC7; border-radius: 12px; font-size: 13px; font-family: inherit; cursor: pointer; margin-top: 8px; }
 .btn-fav { width: 100%; padding: 12px; border: 2px solid #EEE9E2; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; margin-top: 8px; background: white; color: #2D2926; transition: all 0.2s; }
 .btn-fav.active { background: #FFF8D0; border-color: #F9E84A; color: #2D2926; }
+
+/* ── バーコードスキャン ── */
+.scanner-wrap { border-radius: 14px; overflow: hidden; margin-bottom: 12px; background: #000; min-height: 240px; display: flex; align-items: center; justify-content: center; }
+.scanner-hint { font-size: 12px; color: #A89E94; text-align: center; margin-bottom: 12px; line-height: 1.7; }
+.scan-result-card { background: #F0F7FF; border: 2px solid #4A90D9; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.scan-result-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.scan-result-sub  { font-size: 12px; color: #A89E94; }
 
 /* ── 購入履歴 ── */
 .history-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #F7F4EF; cursor: pointer; }
@@ -136,6 +136,18 @@ body { background: #F7F4EF; }
 .shop-info { font-size: 12px; color: #A89E94; margin-top: 2px; }
 .shop-last { font-size: 11px; color: #C06A9E; margin-top: 2px; }
 .shop-fav  { font-size: 11px; color: #B8960A; margin-top: 2px; font-weight: 600; }
+
+/* ── 消費統計 ── */
+.stats-section { margin-bottom: 20px; }
+.stats-heading { font-size: 13px; font-weight: 700; color: #2D2926; margin-bottom: 10px; }
+.stats-card { background: white; border-radius: 14px; padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 10px; }
+.stats-item-name { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.bar-label { font-size: 11px; color: #A89E94; width: 40px; flex-shrink: 0; text-align: right; }
+.bar-track { flex: 1; height: 16px; background: #F7F4EF; border-radius: 8px; overflow: hidden; }
+.bar-fill  { height: 100%; border-radius: 8px; transition: width 0.4s; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
+.bar-val   { font-size: 10px; color: white; font-weight: 700; }
+.stats-empty { text-align: center; padding: 40px 20px; color: #A89E94; font-size: 13px; line-height: 2; }
 
 /* ── トースト ── */
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2D2926; color: white; padding: 10px 20px; border-radius: 20px; font-size: 13px; font-family: 'Noto Sans JP', sans-serif; z-index: 999; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.2); animation: fup 0.3s ease; }
