@@ -333,15 +333,19 @@ export function StatsModal({ cats, items, onClose }) {
             </span>
           </div>
           {months.map(m => {
-            const val = item.monthly[m];
-            const pct = Math.round(val / maxVal * 100);
-            const label = m.slice(5); // "06" など月だけ
+            const val   = item.monthly[m];
+            const pct   = Math.round(val / maxVal * 100);
+            const label = m.slice(5);
+            // 0件月はグレーで薄く表示
             return (
-              <div key={m} className="bar-row">
+              <div key={m} className="bar-row" style={{ opacity: val === 0 ? 0.35 : 1 }}>
                 <div className="bar-label">{label}月</div>
                 <div className="bar-track">
                   <div className="bar-fill"
-                    style={{ width: `${pct}%`, background: item.cat.color, minWidth: val > 0 ? 24 : 0 }}>
+                    style={{
+                      width: val === 0 ? "4px" : `${Math.max(pct, 8)}%`,
+                      background: val === 0 ? "#C4BEB8" : item.cat.color,
+                    }}>
                     {val > 0 && <span className="bar-val">{val}</span>}
                   </div>
                 </div>
