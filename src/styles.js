@@ -4,70 +4,71 @@ body { background: #F7F4EF; }
 .app { min-height: 100vh; font-family: 'Noto Sans JP', sans-serif; background: #F7F4EF; color: #2D2926; padding-bottom: 80px; }
 
 /* ── ヘッダー ── */
-.header { background: #2D2926; color: #F7F4EF; padding: 16px 16px 0; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
-.header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.header-title { font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 18px; font-weight: 700; }
-.header-right { display: flex; gap: 8px; align-items: center; }
-.add-cat-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 7px 12px; border-radius: 20px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 500; white-space: nowrap; }
-.shop-btn { background: #E8734A; color: white; border: none; width: 38px; height: 38px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; }
-.stats-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); width: 38px; height: 38px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.header { background: #2D2926; color: #F7F4EF; padding: 14px 14px 0; position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+.header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+.header-title { font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 17px; font-weight: 700; white-space: nowrap; }
+.header-right { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.add-cat-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 6px 11px; border-radius: 20px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.shop-btn { background: #E8734A; color: white; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0; }
+.stats-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); width: 36px; height: 36px; border-radius: 50%; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .badge { position: absolute; top: -4px; right: -4px; background: white; color: #E8734A; border-radius: 50%; width: 16px; height: 16px; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab { padding: 10px 14px; background: transparent; border: none; color: #A89E94; font-size: 12px; font-family: inherit; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 500; white-space: nowrap; flex-shrink: 0; transition: color 0.2s; }
+.tab { padding: 9px 13px; background: transparent; border: none; color: #A89E94; font-size: 12px; font-family: inherit; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 500; white-space: nowrap; flex-shrink: 0; transition: color 0.2s; }
 .tab.active { color: #F7F4EF; border-bottom-color: #E8734A; }
-.tab.alert { color: #E8734A; }
-.tab.alert.active { color: #F7F4EF; border-bottom-color: #E8734A; }
+.tab.alert { color: #F09436; }
+.tab.alert.active { color: #F7F4EF; border-bottom-color: #F09436; }
 
 /* ── コンテンツ ── */
-.content { padding: 16px; max-width: 480px; margin: 0 auto; }
+.content { padding: 12px 14px; max-width: 480px; margin: 0 auto; }
 .empty { text-align: center; padding: 48px 20px; color: #A89E94; }
 .empty-icon { font-size: 48px; margin-bottom: 12px; }
 
 /* ── アイテムカード ── */
-.item-card { background: white; border-radius: 14px; padding: 14px 14px 12px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-left: 4px solid #EEE9E2; transition: all 0.2s; cursor: pointer; }
+.item-card { background: white; border-radius: 14px; padding: 12px 14px 10px; margin-bottom: 8px; box-shadow: 0 1px 8px rgba(0,0,0,0.07); border-left: 4px solid #EEE9E2; transition: all 0.2s; cursor: pointer; }
 .item-card.low  { border-left-color: #E8734A; background: linear-gradient(135deg, #FFFAF7, white); }
 .item-card.soon { border-left-color: #D4A843; background: linear-gradient(135deg, #FFFDF0, white); }
 .item-card:active { transform: scale(0.99); }
-.item-main { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; }
+.item-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
 .item-info { flex: 1; min-width: 0; }
-.item-name { font-size: 15px; font-weight: 700; }
-.item-meta { font-size: 11px; color: #A89E94; margin-top: 3px; }
+.item-name { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.item-meta { font-size: 11px; color: #A89E94; margin-top: 2px; }
 .last-buy { color: #C06A9E; font-weight: 500; }
-.low-badge  { background: #E8734A; color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; display: inline-block; margin-top: 5px; }
-.soon-badge { background: #D4A843; color: white; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; display: inline-block; margin-top: 5px; margin-left: 4px; }
-.fav-badge  { background: #F9E84A; color: #2D2926; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; display: inline-block; margin-top: 5px; margin-left: 4px; }
-.pred-text  { font-size: 11px; color: #A89E94; margin-top: 3px; }
+.badges-row { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.low-badge  { background: #E8734A; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+.soon-badge { background: #D4A843; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+.fav-badge  { background: #F9E84A; color: #2D2926; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+.pred-text  { font-size: 11px; color: #B0A89E; margin-top: 2px; }
 .pred-text.warn { color: #D4A843; font-weight: 600; }
 .stock-area { text-align: right; flex-shrink: 0; }
-.stock-num { font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 34px; font-weight: 700; line-height: 1; color: #2D2926; }
+.stock-num { font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 36px; font-weight: 700; line-height: 1; color: #2D2926; }
 .stock-num.low { color: #E8734A; }
-.stock-unit { font-size: 11px; color: #A89E94; margin-top: 2px; }
+.stock-unit { font-size: 11px; color: #A89E94; margin-top: 1px; }
 .ctrl-row { display: flex; align-items: center; gap: 8px; }
-.progress-bar { flex: 1; height: 4px; background: #F7F4EF; border-radius: 4px; overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
-.ctrl { width: 36px; height: 36px; border-radius: 10px; border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; transition: all 0.15s; flex-shrink: 0; }
-.ctrl.minus { background: #F7F4EF; color: #2D2926; }
+.progress-bar { flex: 1; height: 8px; background: #F0EDE8; border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 6px; transition: width 0.4s; }
+.ctrl { width: 38px; height: 38px; border-radius: 11px; border: none; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; transition: all 0.15s; flex-shrink: 0; }
+.ctrl.minus { background: #F0EDE8; color: #2D2926; }
 .ctrl.plus  { background: #2D2926; color: white; }
-.ctrl:active { transform: scale(0.9); }
+.ctrl:active { transform: scale(0.88); }
 .edit-row { display: flex; gap: 8px; margin-top: 6px; }
 .edit-btn { flex: 1; padding: 8px; border: 1.5px solid #EEE9E2; border-radius: 10px; background: white; font-size: 12px; font-family: inherit; cursor: pointer; color: #2D2926; font-weight: 500; }
 .del-btn  { padding: 8px 16px; border: 1.5px solid #FFE0D5; border-radius: 10px; background: white; font-size: 12px; font-family: inherit; cursor: pointer; color: #E8734A; font-weight: 500; }
 
 /* ── 編集パネル ── */
-.bottom-edit { margin-top: 16px; }
-.edit-toggle { width: 100%; padding: 12px; border: 2px dashed #D4CEC7; border-radius: 14px; background: transparent; font-size: 13px; font-family: inherit; cursor: pointer; color: #A89E94; font-weight: 500; transition: all 0.2s; }
+.bottom-edit { margin-top: 12px; }
+.edit-toggle { width: 100%; padding: 11px; border: 2px dashed #D4CEC7; border-radius: 14px; background: transparent; font-size: 13px; font-family: inherit; cursor: pointer; color: #B0A89E; font-weight: 500; transition: all 0.2s; }
 .edit-toggle:hover { border-color: #2D2926; color: #2D2926; }
-.edit-panel { background: white; border-radius: 14px; padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+.edit-panel { background: white; border-radius: 14px; padding: 12px; box-shadow: 0 1px 8px rgba(0,0,0,0.07); }
 .edit-panel-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.btn-add-item     { flex: 2; padding: 12px; background: #2D2926; color: white; border: none; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 700; }
-.btn-cat-settings { flex: 1; padding: 12px; background: #F7F4EF; color: #2D2926; border: none; border-radius: 10px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 500; }
-.btn-scan         { flex: 1; padding: 12px; background: #4A90D9; color: white; border: none; border-radius: 10px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 700; }
-.btn-done { width: 100%; padding: 11px; background: white; border: 1.5px solid #EEE9E2; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; color: #A89E94; }
+.btn-add-item     { flex: 2; padding: 11px; background: #2D2926; color: white; border: none; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 700; }
+.btn-cat-settings { flex: 1; padding: 11px; background: #F7F4EF; color: #2D2926; border: none; border-radius: 10px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 500; }
+.btn-scan         { flex: 1; padding: 11px; background: #4A90D9; color: white; border: none; border-radius: 10px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 700; }
+.btn-done { width: 100%; padding: 10px; background: white; border: 1.5px solid #EEE9E2; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; color: #A89E94; }
 
 /* ── モーダル共通 ── */
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: flex-end; justify-content: center; z-index: 100; backdrop-filter: blur(3px); }
-.modal { background: white; border-radius: 24px 24px 0 0; padding: 8px 20px 32px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+.modal { background: white; border-radius: 24px 24px 0 0; padding: 8px 20px 36px; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; }
 .modal-handle { width: 40px; height: 4px; background: #EEE9E2; border-radius: 2px; margin: 12px auto 20px; }
 .modal-title { font-size: 17px; font-weight: 700; font-family: 'Zen Kaku Gothic New', sans-serif; margin-bottom: 4px; }
 .modal-sub { font-size: 12px; color: #A89E94; margin-bottom: 16px; }
@@ -90,10 +91,10 @@ body { background: #F7F4EF; }
 .btn-primary { width: 100%; padding: 14px; background: #2D2926; color: white; border: none; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 700; margin-top: 4px; }
 .btn-cancel  { width: 100%; padding: 12px; background: #F7F4EF; color: #888; border: none; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 500; margin-top: 8px; }
 .btn-danger  { width: 100%; padding: 12px; background: #FFF0EC; color: #E8734A; border: none; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; margin-top: 8px; }
-.btn-record  { width: 100%; padding: 13px 16px; background: #2D2926; color: white; border: none; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 700; margin-bottom: 8px; }
+.btn-record  { width: 100%; padding: 13px; background: #2D2926; color: white; border: none; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 700; margin-bottom: 8px; }
 .btn-ghost   { width: 100%; padding: 12px; background: transparent; color: #A89E94; border: 1.5px dashed #D4CEC7; border-radius: 12px; font-size: 13px; font-family: inherit; cursor: pointer; margin-top: 8px; }
 .btn-fav { width: 100%; padding: 12px; border: 2px solid #EEE9E2; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; margin-top: 8px; background: white; color: #2D2926; transition: all 0.2s; }
-.btn-fav.active { background: #FFF8D0; border-color: #F9E84A; color: #2D2926; }
+.btn-fav.active { background: #FFF8D0; border-color: #F9E84A; }
 
 /* ── バーコードスキャン ── */
 .scanner-wrap { border-radius: 14px; overflow: hidden; margin-bottom: 12px; background: #000; min-height: 240px; display: flex; align-items: center; justify-content: center; }
@@ -138,15 +139,13 @@ body { background: #F7F4EF; }
 .shop-fav  { font-size: 11px; color: #B8960A; margin-top: 2px; font-weight: 600; }
 
 /* ── 消費統計 ── */
-.stats-section { margin-bottom: 20px; }
-.stats-heading { font-size: 13px; font-weight: 700; color: #2D2926; margin-bottom: 10px; }
-.stats-card { background: white; border-radius: 14px; padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 10px; }
-.stats-item-name { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
-.bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.bar-label { font-size: 11px; color: #A89E94; width: 40px; flex-shrink: 0; text-align: right; }
-.bar-track { flex: 1; height: 16px; background: #F7F4EF; border-radius: 8px; overflow: hidden; }
-.bar-fill  { height: 100%; border-radius: 8px; transition: width 0.4s; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
-.bar-val   { font-size: 10px; color: white; font-weight: 700; }
+.stats-card { background: white; border-radius: 14px; padding: 14px; box-shadow: 0 1px 8px rgba(0,0,0,0.07); margin-bottom: 10px; }
+.stats-item-name { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+.bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.bar-label { font-size: 11px; color: #A89E94; width: 36px; flex-shrink: 0; text-align: right; }
+.bar-track { flex: 1; height: 22px; background: #F0EDE8; border-radius: 8px; overflow: hidden; }
+.bar-fill  { height: 100%; border-radius: 8px; transition: width 0.5s; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; min-width: 0; }
+.bar-val   { font-size: 11px; color: white; font-weight: 700; }
 .stats-empty { text-align: center; padding: 40px 20px; color: #A89E94; font-size: 13px; line-height: 2; }
 
 /* ── トースト ── */
