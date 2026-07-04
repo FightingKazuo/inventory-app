@@ -247,10 +247,10 @@ export default function App() {
                                 平均 {item.pred.avgDays} 日/回 · あと約 {item.pred.daysLeft} 日
                               </div>
                             )}
-                            <div>
+                            <div className="badges-row">
                               {isLow  && <span className="low-badge">要購入</span>}
                               {isSoon && <span className="soon-badge">⚠️ そろそろ</span>}
-                              {fav    && <span className="fav-badge">⭐</span>}
+                              {fav    && <span className="fav-badge">⭐ お気に入り</span>}
                             </div>
                           </div>
                           <div className="stock-area">
@@ -280,7 +280,7 @@ export default function App() {
               <div className="bottom-edit">
                 {!editMode
                   ? <button className="edit-toggle" onClick={() => setEditMode(true)}>
-                      ✏️ {activeCat?.icon} {activeCat?.label}を編集
+                      ✏️ {activeCat?.label}を編集
                     </button>
                   : <div className="edit-panel">
                       <div className="edit-panel-row">
