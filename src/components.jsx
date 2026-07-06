@@ -529,25 +529,27 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
     )}
 
     {!result && !loading && (
-      <div className="frow" style={{ marginBottom: 12 }}>
-        <div>
-          <div className="flabel">購入日</div>
-          <input className="finput" type="date" value={buyDate}
-            onChange={e => setBuyDate(e.target.value)} />
+      <>
+        <div className="frow" style={{ marginBottom: 12 }}>
+          <div>
+            <div className="flabel">購入日</div>
+            <input className="finput" type="date" value={buyDate}
+              onChange={e => setBuyDate(e.target.value)} />
+          </div>
+          <div>
+            <div className="flabel">購入本数</div>
+            <input className="finput" type="number" min="1" max="99" value={qty}
+              onChange={e => setQty(Math.max(1, +e.target.value))} />
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
+            <span style={{ fontSize: 13, color: "#A89E94" }}>{item.unit}</span>
+          </div>
         </div>
-        <div>
-          <div className="flabel">購入本数</div>
-          <input className="finput" type="number" min="1" max="99" value={qty}
-            onChange={e => setQty(Math.max(1, +e.target.value))} />
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
-          <span style={{ fontSize: 13, color: "#A89E94" }}>{item.unit}</span>
-        </div>
-      </div>
-      <button className="btn-ghost"
-        onClick={() => onAdd(catId, item.id, { name: query, brand: "", description: "", imageUrl: null, memo, isFavorite: isFav, buyDate, qty })}>
-        検索せず「{query}」として記録
-      </button>
+        <button className="btn-ghost"
+          onClick={() => onAdd(catId, item.id, { name: query, brand: "", description: "", imageUrl: null, memo, isFavorite: isFav, buyDate, qty })}>
+          検索せず「{query}」として記録
+        </button>
+      </>
     )}
 
     <button className="btn-cancel" onClick={() => setModal({ type: "history", catId, item })}>
