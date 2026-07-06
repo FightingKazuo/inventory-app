@@ -12,7 +12,7 @@ body { background: #F7F4EF; }
 .shop-btn { background: #E8734A; color: white; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0; }
 .stats-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); width: 36px; height: 36px; border-radius: 50%; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .settings-btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 7px 13px; border-radius: 20px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 600; white-space: nowrap; }
-.shop-count-badge { background: #E8734A; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+
 .badge { position: absolute; top: -4px; right: -4px; background: white; color: #E8734A; border-radius: 50%; width: 16px; height: 16px; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -20,6 +20,8 @@ body { background: #F7F4EF; }
 .tab.active { color: #F7F4EF; border-bottom-color: #E8734A; }
 .tab.alert { color: #F09436; }
 .tab.alert.active { color: #F7F4EF; border-bottom-color: #F09436; }
+.tab.shop-tab { color: #5BAD8F; }
+.tab.shop-tab.active { color: #F7F4EF; border-bottom-color: #5BAD8F; }
 
 /* ── コンテンツ ── */
 .content { padding: 12px 14px; max-width: 480px; margin: 0 auto; }
@@ -151,13 +153,16 @@ body { background: #F7F4EF; }
 .stats-empty { text-align: center; padding: 40px 20px; color: #A89E94; font-size: 13px; line-height: 2; }
 
 /* ── 設定モーダル ── */
-.settings-section { margin-bottom: 4px; }
-.settings-label { font-size: 11px; color: #A89E94; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; margin-top: 16px; }
-.settings-divider { height: 1px; background: #F0EDE8; margin: 8px 0; }
-.settings-cat-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #F7F4EF; font-size: 14px; font-weight: 500; }
-.settings-cat-row:last-of-type { border-bottom: none; }
-.settings-empty-note { font-size: 13px; color: #A89E94; text-align: center; padding: 12px 0; }
-.settings-action-btn { width: 100%; padding: 13px; background: #F7F4EF; color: #2D2926; border: none; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; text-align: left; }
+.settings-label { font-size: 11px; color: #A89E94; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.settings-divider { height: 1px; background: #F0EDE8; }
+.settings-menu { background: white; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 8px rgba(0,0,0,0.07); margin-bottom: 4px; }
+.settings-menu-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 15px 16px; background: white; border: none; border-bottom: 1px solid #F7F4EF; font-family: inherit; cursor: pointer; text-align: left; transition: background 0.15s; }
+.settings-menu-row:last-child { border-bottom: none; }
+.settings-menu-row:active { background: #F7F4EF; }
+.settings-menu-icon { font-size: 20px; flex-shrink: 0; }
+.settings-menu-label { flex: 1; font-size: 15px; font-weight: 600; color: #2D2926; }
+.settings-menu-sub { font-size: 12px; color: #A89E94; }
+.settings-menu-arrow { font-size: 20px; color: #C4BEB8; font-weight: 300; }
 
 /* ── 履歴アイテム（削除ボタン付き）── */
 .history-item-wrap { display: flex; align-items: flex-start; border-bottom: 1px solid #F7F4EF; }
