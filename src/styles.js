@@ -152,6 +152,21 @@ body { background: #F7F4EF; }
 .bar-val   { font-size: 11px; color: white; font-weight: 700; }
 .stats-empty { text-align: center; padding: 40px 20px; color: #A89E94; font-size: 13px; line-height: 2; }
 
+/* ── カスタムキーパッド ── */
+.numfield { border: 2px solid #EEE9E2; border-radius: 10px; padding: 13px 13px; font-size: 22px; font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; background: #F7F4EF; text-align: center; cursor: pointer; margin-bottom: 12px; min-height: 52px; display: flex; align-items: center; justify-content: center; transition: border-color 0.15s; }
+.numfield.active { border-color: #2D2926; background: white; }
+.numpad-wrap { background: #F0EDE8; border-radius: 14px; padding: 10px; margin-bottom: 8px; }
+.numpad-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.numpad-row:last-child { margin-bottom: 0; }
+.numpad-key { flex: 1; height: 52px; border: none; border-radius: 10px; background: white; font-size: 20px; font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 600; color: #2D2926; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.1); transition: all 0.1s; }
+.numpad-key:active { transform: scale(0.93); background: #EEE9E2; }
+.numpad-empty { background: transparent; box-shadow: none; cursor: default; }
+.numpad-del { background: #EEE9E2; color: #888; font-size: 18px; }
+.numpad-ok  { background: #2D2926; color: white; }
+.unit-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.unit-preset-btn { padding: 7px 14px; border: 1.5px solid #EEE9E2; border-radius: 20px; background: white; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+.unit-preset-btn.active { border-color: #2D2926; background: #2D2926; color: white; }
+
 /* ── 設定モーダル ── */
 .settings-label { font-size: 11px; color: #A89E94; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
 .settings-divider { height: 1px; background: #F0EDE8; }
