@@ -86,42 +86,111 @@ export function EditCatModal({ cat, onSave, onDelete, onClose }) {
   </>;
 }
 
+// ─── カスタムキーパッド ──────────────────────────────────────────────
+function NumPad({ value, onChange, onClose }) {
+  const tap = (v) => {
+    if (v === "del") {
+      onChange(String(value).slice(0, -1) || "0");
+    } else if (v === "ok") {
+      onClose();
+    } else {
+      const next = String(value) === "0" ? String(v) : String(value) + String(v);
+      onChange(next.slice(0, 3)); // 最大3桁
+    }
+  };
+  const keys = [["1","2","3"],["4","5","6"],["7","8","9"],["","0","del"]];
+  return (
+    <div className="numpad-wrap">
+      {keys.map((row, ri) => (
+        <div key={ri} className="numpad-row">
+          {row.map((k, ki) => (
+            <button key={ki} className={`numpad-key ${k === "" ? "numpad-empty" : ""} ${k === "del" ? "numpad-del" : ""} ${k === "ok" ? "numpad-ok" : ""}`}
+              onClick={() => k !== "" && tap(k)}>
+              {k === "del" ? "⌫" : k}
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── アイテム追加 ────────────────────────────────────────────────────
 export function AddItemModal({ catId, onAdd, onClose, prefill }) {
-  const [d, setD] = useState({
+  const [d,       setD]       = useState({
     name: prefill?.name || "",
-    stock: 1, threshold: 1,
+    stock: "1", threshold: "1",
     unit: prefill?.unit || "個",
   });
+  const [focus, setFocus] = useState(null); // "stock" | "threshold" | "unit" | "name"
+
+  const UNIT_PRESETS = ["個","本","袋","枚","缶","箱","パック","ロール","セット"];
+
+  const updateNum = (field, val) => {
+    const n = val === "" ? "0" : val;
+    setD(prev => ({ ...prev, [field]: n }));
+  };
+
   return <>
     <div className="modal-title">アイテムを追加</div>
+
     {prefill && (
       <div className="scan-result-card">
         <div className="scan-result-name">{prefill.name}</div>
         {prefill.brand && <div className="scan-result-sub">{prefill.brand}</div>}
       </div>
     )}
+
+    {/* アイテム名（通常キーボード） */}
     <div className="flabel">アイテム名</div>
     <input className="finput" placeholder="例: シャンプー" value={d.name}
-      onChange={e => setD({ ...d, name: e.target.value })} autoFocus />
-    <div className="frow">
+      onChange={e => setD({ ...d, name: e.target.value })}
+      onFocus={() => setFocus("name")} autoFocus />
+
+    {/* 数値フィールド（カスタムキーパッド） */}
+    <div className="frow" style={{ marginBottom: 8 }}>
       <div>
         <div className="flabel">在庫数</div>
-        <input className="finput" type="number" min="0" value={d.stock}
-          onChange={e => setD({ ...d, stock: e.target.value })} />
+        <div className={`numfield ${focus === "stock" ? "active" : ""}`}
+          onClick={() => setFocus("stock")}>
+          {d.stock}
+        </div>
       </div>
       <div>
         <div className="flabel">購入目安</div>
-        <input className="finput" type="number" min="0" value={d.threshold}
-          onChange={e => setD({ ...d, threshold: e.target.value })} />
+        <div className={`numfield ${focus === "threshold" ? "active" : ""}`}
+          onClick={() => setFocus("threshold")}>
+          {d.threshold}
+        </div>
       </div>
       <div>
         <div className="flabel">単位</div>
-        <input className="finput" placeholder="個" value={d.unit}
-          onChange={e => setD({ ...d, unit: e.target.value })} />
+        <div className={`numfield ${focus === "unit" ? "active" : ""}`}
+          onClick={() => setFocus("unit")} style={{ fontSize: 14 }}>
+          {d.unit}
+        </div>
       </div>
     </div>
-    <button className="btn-primary" onClick={() => d.name.trim() && onAdd(catId, d)}>
+
+    {/* 単位プリセット */}
+    {focus === "unit" && (
+      <div className="unit-presets">
+        {UNIT_PRESETS.map(u => (
+          <button key={u} className={`unit-preset-btn ${d.unit === u ? "active" : ""}`}
+            onClick={() => { setD(prev => ({ ...prev, unit: u })); setFocus(null); }}>
+            {u}
+          </button>
+        ))}
+      </div>
+    )}
+
+    {/* カスタムキーパッド */}
+    {(focus === "stock" || focus === "threshold") && (
+      <NumPad value={d[focus]} onChange={v => updateNum(focus, v)} onClose={() => setFocus(null)} />
+    )}
+
+    <button className="btn-primary" style={{ marginTop: 8 }}
+      onClick={() => d.name.trim() && onAdd(catId, d)}>
       追加する
     </button>
     <button className="btn-cancel" onClick={onClose}>キャンセル</button>
@@ -130,32 +199,60 @@ export function AddItemModal({ catId, onAdd, onClose, prefill }) {
 
 // ─── アイテム編集 ────────────────────────────────────────────────────
 export function EditItemModal({ catId, item, onSave, onClose }) {
-  const [d,            setD]            = useState({ ...item });
+  const [d,            setD]            = useState({
+    ...item,
+    stock:     String(item.stock),
+    threshold: String(item.threshold),
+  });
+  const [focus,        setFocus]        = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const logCount = (item.usageLogs || []).length;
+
+  const UNIT_PRESETS = ["個","本","袋","枚","缶","箱","パック","ロール","セット"];
+  const updateNum = (field, val) => setD(prev => ({ ...prev, [field]: val === "" ? "0" : val }));
+
   return <>
     <div className="modal-title">アイテムを編集</div>
     <div className="flabel">アイテム名</div>
     <input className="finput" value={d.name}
-      onChange={e => setD({ ...d, name: e.target.value })} />
-    <div className="frow">
+      onChange={e => setD({ ...d, name: e.target.value })}
+      onFocus={() => setFocus("name")} />
+
+    <div className="frow" style={{ marginBottom: 8 }}>
       <div>
         <div className="flabel">在庫数</div>
-        <input className="finput" type="number" min="0" value={d.stock}
-          onChange={e => setD({ ...d, stock: e.target.value })} />
+        <div className={`numfield ${focus === "stock" ? "active" : ""}`}
+          onClick={() => setFocus("stock")}>{d.stock}</div>
       </div>
       <div>
         <div className="flabel">購入目安</div>
-        <input className="finput" type="number" min="0" value={d.threshold}
-          onChange={e => setD({ ...d, threshold: e.target.value })} />
+        <div className={`numfield ${focus === "threshold" ? "active" : ""}`}
+          onClick={() => setFocus("threshold")}>{d.threshold}</div>
       </div>
       <div>
         <div className="flabel">単位</div>
-        <input className="finput" value={d.unit}
-          onChange={e => setD({ ...d, unit: e.target.value })} />
+        <div className={`numfield ${focus === "unit" ? "active" : ""}`}
+          onClick={() => setFocus("unit")} style={{ fontSize: 14 }}>{d.unit}</div>
       </div>
     </div>
-    <button className="btn-primary" onClick={() => d.name.trim() && onSave(catId, d)}>
+
+    {focus === "unit" && (
+      <div className="unit-presets">
+        {UNIT_PRESETS.map(u => (
+          <button key={u} className={`unit-preset-btn ${d.unit === u ? "active" : ""}`}
+            onClick={() => { setD(prev => ({ ...prev, unit: u })); setFocus(null); }}>
+            {u}
+          </button>
+        ))}
+      </div>
+    )}
+
+    {(focus === "stock" || focus === "threshold") && (
+      <NumPad value={d[focus]} onChange={v => updateNum(focus, v)} onClose={() => setFocus(null)} />
+    )}
+
+    <button className="btn-primary" style={{ marginTop: 8 }}
+      onClick={() => d.name.trim() && onSave(catId, d)}>
       保存する
     </button>
 
