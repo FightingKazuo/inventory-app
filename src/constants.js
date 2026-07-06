@@ -28,38 +28,33 @@ export const DEFAULT_ITEMS = {
   ],
 };
 
-// ストレージキー
-export const STORAGE_CATS  = "inv5-cats";
-export const STORAGE_ITEMS = "inv5-items";
+// ストレージキー（固定 — 今後変えない）
+export const STORAGE_CATS  = "inv-cats";
+export const STORAGE_ITEMS = "inv-items";
+
+// 旧キー一覧（移行用 — 新しい順に並べる）
+export const LEGACY_KEYS = [
+  { cats: "inv5-cats",  items: "inv5-items"  },
+  { cats: "inv4-cats",  items: "inv4-items"  },
+  { cats: "inv3-cats",  items: "inv3-items"  },
+];
 
 // グローバルID
 export let gId = 400;
 export const nextId = () => ++gId;
 
-// 消費予測：usageLogsから平均消費日数を計算
-// usageLogs = [{ date: "2026/06/01" }, ...]  (−ボタンを押すたびに追記)
+// 消費予測
 export function calcPrediction(item) {
   const logs = item.usageLogs || [];
-  if (logs.length < 2) return null; // データ不足
-
-  // 日付を昇順ソート
-  const dates = logs
-    .map(l => new Date(l.date))
-    .sort((a, b) => a - b);
-
-  // 連続する日付間の差分（日）を集計
+  if (logs.length < 2) return null;
+  const dates = logs.map(l => new Date(l.date)).sort((a, b) => a - b);
   const gaps = [];
   for (let i = 1; i < dates.length; i++) {
     const diff = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24);
     if (diff > 0) gaps.push(diff);
   }
   if (gaps.length === 0) return null;
-
   const avgDays = gaps.reduce((a, b) => a + b, 0) / gaps.length;
   const daysLeft = Math.round(avgDays * item.stock);
-
-  return {
-    avgDays: Math.round(avgDays * 10) / 10, // 小数1桁
-    daysLeft,
-  };
+  return { avgDays: Math.round(avgDays * 10) / 10, daysLeft };
 }
