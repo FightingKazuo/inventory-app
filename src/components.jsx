@@ -130,7 +130,9 @@ export function AddItemModal({ catId, onAdd, onClose, prefill }) {
 
 // ─── アイテム編集 ────────────────────────────────────────────────────
 export function EditItemModal({ catId, item, onSave, onClose }) {
-  const [d, setD] = useState({ ...item });
+  const [d,            setD]            = useState({ ...item });
+  const [confirmReset, setConfirmReset] = useState(false);
+  const logCount = (item.usageLogs || []).length;
   return <>
     <div className="modal-title">アイテムを編集</div>
     <div className="flabel">アイテム名</div>
@@ -156,6 +158,18 @@ export function EditItemModal({ catId, item, onSave, onClose }) {
     <button className="btn-primary" onClick={() => d.name.trim() && onSave(catId, d)}>
       保存する
     </button>
+
+    {logCount > 0 && (
+      !confirmReset
+        ? <button className="btn-danger" onClick={() => setConfirmReset(true)}>
+            消費履歴をリセット（{logCount}件）
+          </button>
+        : <button className="btn-danger" style={{ fontWeight: 800 }}
+            onClick={() => onSave(catId, { ...d, usageLogs: [] })}>
+            ⚠️ リセットを確定する
+          </button>
+    )}
+
     <button className="btn-cancel" onClick={onClose}>キャンセル</button>
   </>;
 }
@@ -360,7 +374,7 @@ export function StatsModal({ cats, items, onClose }) {
 }
 
 // ─── 購入履歴モーダル ────────────────────────────────────────────────
-export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory }) {
+export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory, onDeleteHistory }) {
   const hist = item.history || [];
   const fav  = item.favorite;
 
@@ -395,19 +409,22 @@ export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory })
           <span style={{ fontSize: 11 }}>購入した商品を上のボタンで記録できます</span>
         </div>
       : hist.map((h, idx) => (
-        <div key={h.id} className="history-item" onClick={() => onReuseHistory(catId, item, h)}>
-          <ProductImage url={h.imageUrl} size={52} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
-              <div className="hist-name">{h.name}</div>
-              {idx === 0 && <span className="latest-tag">最新</span>}
-              {h.isFavorite && <span className="fav-tag">⭐ お気に入り</span>}
+        <div key={h.id} className="history-item-wrap">
+          <div className="history-item" style={{ flex: 1 }} onClick={() => onReuseHistory(catId, item, h)}>
+            <ProductImage url={h.imageUrl} size={52} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+                <div className="hist-name">{h.name}</div>
+                {idx === 0 && <span className="latest-tag">最新</span>}
+                {h.isFavorite && <span className="fav-tag">⭐ お気に入り</span>}
+              </div>
+              {h.brand       && <div className="hist-brand">{h.brand}</div>}
+              {h.description && <div className="hist-desc">{h.description}</div>}
+              {h.memo        && <div className="hist-memo">📝 {h.memo}</div>}
+              <div className="hist-date">{h.date}{h.qty > 1 ? ` · ${h.qty}${item.unit}購入` : ""}</div>
             </div>
-            {h.brand       && <div className="hist-brand">{h.brand}</div>}
-            {h.description && <div className="hist-desc">{h.description}</div>}
-            {h.memo        && <div className="hist-memo">📝 {h.memo}</div>}
-            <div className="hist-date">{h.date}</div>
           </div>
+          <button className="hist-del-btn" onClick={() => onDeleteHistory(catId, item.id, h.id, h.qty || 1)}>🗑️</button>
         </div>
       ))}
 
@@ -417,11 +434,14 @@ export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory })
 
 // ─── 購入記録モーダル ────────────────────────────────────────────────
 export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const [query,   setQuery]   = useState(prefill?.name || item.name);
   const [result,  setResult]  = useState(prefill || null);
   const [loading, setLoading] = useState(false);
   const [memo,    setMemo]    = useState(prefill?.memo || "");
   const [isFav,   setIsFav]   = useState(prefill?.isFavorite || false);
+  const [buyDate, setBuyDate] = useState(today);
+  const [qty,     setQty]     = useState(1);
 
   const search = async () => {
     if (!query.trim()) return;
@@ -486,16 +506,46 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
         <button className={`btn-fav ${isFav ? "active" : ""}`} onClick={() => setIsFav(v => !v)}>
           {isFav ? "⭐ お気に入りに設定済み" : "☆ お気に入りに設定する"}
         </button>
-        <button className="btn-primary" style={{ marginTop: 12 }}
-          onClick={() => onAdd(catId, item.id, { ...result, memo, isFavorite: isFav })}>
+        <div className="frow" style={{ marginBottom: 12 }}>
+          <div>
+            <div className="flabel">購入日</div>
+            <input className="finput" type="date" value={buyDate}
+              onChange={e => setBuyDate(e.target.value)} />
+          </div>
+          <div>
+            <div className="flabel">購入本数</div>
+            <input className="finput" type="number" min="1" max="99" value={qty}
+              onChange={e => setQty(Math.max(1, +e.target.value))} />
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
+            <span style={{ fontSize: 13, color: "#A89E94" }}>{item.unit}</span>
+          </div>
+        </div>
+        <button className="btn-primary" style={{ marginTop: 4 }}
+          onClick={() => onAdd(catId, item.id, { ...result, memo, isFavorite: isFav, buyDate, qty })}>
           この商品を記録する
         </button>
       </>
     )}
 
     {!result && !loading && (
+      <div className="frow" style={{ marginBottom: 12 }}>
+        <div>
+          <div className="flabel">購入日</div>
+          <input className="finput" type="date" value={buyDate}
+            onChange={e => setBuyDate(e.target.value)} />
+        </div>
+        <div>
+          <div className="flabel">購入本数</div>
+          <input className="finput" type="number" min="1" max="99" value={qty}
+            onChange={e => setQty(Math.max(1, +e.target.value))} />
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
+          <span style={{ fontSize: 13, color: "#A89E94" }}>{item.unit}</span>
+        </div>
+      </div>
       <button className="btn-ghost"
-        onClick={() => onAdd(catId, item.id, { name: query, brand: "", description: "", imageUrl: null, memo, isFavorite: isFav })}>
+        onClick={() => onAdd(catId, item.id, { name: query, brand: "", description: "", imageUrl: null, memo, isFavorite: isFav, buyDate, qty })}>
         検索せず「{query}」として記録
       </button>
     )}
@@ -549,7 +599,7 @@ export function ModalLayer({
   modal, setModal, cats, items,
   addCat, updateCat, deleteCat,
   addItem, updateItem,
-  addPurchase, reuseHistory,
+  addPurchase, reuseHistory, deleteHistory,
   onScanFound,
   shopItems, toast_,
 }) {
@@ -561,7 +611,7 @@ export function ModalLayer({
         {modal.type === "editCat"     && <EditCatModal cat={modal.cat} onSave={updateCat} onDelete={deleteCat} onClose={() => setModal(null)} />}
         {modal.type === "addItem"     && <AddItemModal catId={modal.catId} onAdd={addItem} onClose={() => setModal(null)} prefill={modal.prefill} />}
         {modal.type === "editItem"    && <EditItemModal catId={modal.catId} item={modal.item} onSave={updateItem} onClose={() => setModal(null)} />}
-        {modal.type === "history"     && <HistoryModal catId={modal.catId} item={modal.item} setModal={setModal} onClose={() => setModal(null)} onReuseHistory={reuseHistory} />}
+        {modal.type === "history"     && <HistoryModal catId={modal.catId} item={modal.item} setModal={setModal} onClose={() => setModal(null)} onReuseHistory={reuseHistory} onDeleteHistory={deleteHistory} />}
         {modal.type === "addPurchase" && <AddPurchaseModal catId={modal.catId} item={modal.item} onAdd={addPurchase} setModal={setModal} prefill={modal.prefill} />}
         {modal.type === "shopping"    && <ShoppingModal shopItems={shopItems} onClose={() => setModal(null)} toast_={toast_} />}
         {modal.type === "scan"        && <ScanModal catId={modal.catId} onItemFound={onScanFound} onClose={() => setModal(null)} />}
