@@ -351,15 +351,13 @@ export default function App() {
                             <div className="stock-unit">{item.unit}</div>
                           </div>
                         </div>
-                        {!editMode && (
-                          <div className="ctrl-row" onClick={e => e.stopPropagation()}>
-                            <button className="ctrl minus" onClick={() => adjustStock(activeTab, item.id, -1)}>−</button>
-                            <div className="progress-bar">
-                              <div className="progress-fill" style={{ width: `${pct}%`, background: isLow ? "#E8734A" : isSoon ? "#D4A843" : activeCat?.color }} />
-                            </div>
-                            <button className="ctrl plus" onClick={() => adjustStock(activeTab, item.id, 1)}>＋</button>
+                        <div className="ctrl-row" onClick={e => e.stopPropagation()}>
+                          <button className="ctrl minus" onClick={() => adjustStock(activeTab, item.id, -1)}>−</button>
+                          <div className="progress-bar">
+                            <div className="progress-fill" style={{ width: `${pct}%`, background: isLow ? "#E8734A" : isSoon ? "#D4A843" : activeCat?.color }} />
                           </div>
-                        )}
+                          <button className="ctrl plus" onClick={() => adjustStock(activeTab, item.id, 1)}>＋</button>
+                        </div>
                         {editMode && (
                           <div className="edit-row" onClick={e => e.stopPropagation()}>
                             <button className="edit-btn" onClick={() => setModal({ type: "editItem", catId: activeTab, item: { ...item } })}>✏️ 編集</button>
@@ -379,7 +377,6 @@ export default function App() {
                       <div className="edit-panel-row">
                         <button className="btn-add-item" onClick={() => setModal({ type: "addItem", catId: activeTab })}>＋ アイテムを追加</button>
                         <button className="btn-scan" onClick={() => setModal({ type: "scan", catId: activeTab })}>📷 スキャン</button>
-                        <button className="btn-cat-settings" onClick={() => setModal({ type: "editCat", cat: { ...activeCat } })}>⚙️</button>
                       </div>
                       <button className="btn-done" onClick={() => setEditMode(false)}>完了</button>
                     </div>}
@@ -403,4 +400,3 @@ export default function App() {
     </>
   );
 }
-
