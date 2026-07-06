@@ -58,11 +58,11 @@ export default function App() {
       if (saved) {
         setCats(saved.cats);
         setItems(saved.items);
-        setActiveTab(saved.cats[0]?.id);
+        setActiveTab("shop");
       } else {
         setCats(DEFAULT_CATEGORIES);
         setItems(DEFAULT_ITEMS);
-        setActiveTab("kitchen");
+        setActiveTab("shop");
       }
     })();
   }, []);
@@ -202,11 +202,31 @@ export default function App() {
   const allItemsWithPred = cats.flatMap(cat =>
     (items[cat.id] || []).map(item => ({ ...item, cat, pred: calcPrediction(item) }))
   );
-  const soonItems = allItemsWithPred.filter(i => i.pred && i.pred.daysLeft <= SOON_DAYS).sort((a, b) => a.pred.daysLeft - b.pred.daysLeft);
+  const soonItems = allItemsWithPred
+    .filter(i => i.pred && i.pred.daysLeft <= SOON_DAYS)
+    .sort((a, b) => a.pred.daysLeft - b.pred.daysLeft);
+  // 要購入アイテム（在庫 <= 購入目安）
   const shopItems = allItemsWithPred.filter(i => i.stock <= i.threshold);
+
+  // 通常タブのアイテム: 要購入 → そろそろ → 通常 の順にソート
+  const sortActiveItems = (rawItems) =>
+    [...rawItems].sort((a, b) => {
+      const aLow  = a.stock <= a.threshold ? 0 : 1;
+      const bLow  = b.stock <= b.threshold ? 0 : 1;
+      const aSoon = a.pred && a.pred.daysLeft <= SOON_DAYS ? 0 : 1;
+      const bSoon = b.pred && b.pred.daysLeft <= SOON_DAYS ? 0 : 1;
+      const aScore = aLow === 0 ? 0 : aSoon === 0 ? 1 : 2;
+      const bScore = bLow === 0 ? 0 : bSoon === 0 ? 1 : 2;
+      return aScore - bScore;
+    });
+
   const activeItems = activeTab === "soon"
     ? soonItems
-    : (items[activeTab] || []).map(item => ({ ...item, pred: calcPrediction(item) }));
+    : activeTab === "shop"
+    ? shopItems
+    : sortActiveItems(
+        (items[activeTab] || []).map(item => ({ ...item, pred: calcPrediction(item) }))
+      );
 
   return (
     <>
@@ -219,19 +239,17 @@ export default function App() {
           <div className="header-top">
             <div className="header-title">🏠 在庫管理</div>
             <div className="header-right">
-              {/* 買い物リストバッジ（件数だけ見せる） */}
-              {shopItems.length > 0 && (
-                <div className="shop-count-badge" onClick={() => setModal({ type: "settings" })}>
-                  🛒 {shopItems.length}件
-                </div>
-              )}
-              {/* 設定ボタン1つに統合 */}
               <button className="settings-btn" onClick={() => setModal({ type: "settings" })}>
                 ⚙️ 設定
               </button>
             </div>
           </div>
           <div className="tabs">
+            {/* 買うものタブ（常に表示） */}
+            <button className={`tab shop-tab ${activeTab === "shop" ? "active" : ""}`}
+              onClick={() => { setActiveTab("shop"); setEditMode(false); }}>
+              🛒 買うもの{shopItems.length > 0 ? `（${shopItems.length}）` : ""}
+            </button>
             {soonItems.length > 0 && (
               <button className={`tab alert ${activeTab === "soon" ? "active" : ""}`}
                 onClick={() => { setActiveTab("soon"); setEditMode(false); }}>
@@ -250,10 +268,13 @@ export default function App() {
         {/* コンテンツ */}
         <div className="content">
 
-          {/* そろそろ切れるタブ */}
-          {activeTab === "soon" && (
+          {/* 買うもの・そろそろ切れるタブ */}
+          {(activeTab === "soon" || activeTab === "shop") && (
             activeItems.length === 0
-              ? <div className="empty"><div className="empty-icon">✅</div><div>切れそうなものはありません</div></div>
+              ? <div className="empty">
+                  <div className="empty-icon">{activeTab === "shop" ? "✅" : "✅"}</div>
+                  <div>{activeTab === "shop" ? "買うものはありません" : "切れそうなものはありません"}</div>
+                </div>
               : activeItems.map(item => {
                   const isLow = item.stock <= item.threshold;
                   const catId = item.cat.id;
@@ -265,10 +286,14 @@ export default function App() {
                         <div className="item-info">
                           <div className="item-name">{item.name}</div>
                           <div className="item-meta">{item.cat.icon} {item.cat.label}</div>
-                          <div className={`pred-text ${item.pred.daysLeft <= 3 ? "warn" : ""}`}>
-                            あと約 {item.pred.daysLeft} 日
+                          {item.pred && (
+                            <div className={`pred-text ${item.pred.daysLeft <= 3 ? "warn" : ""}`}>
+                              あと約 {item.pred.daysLeft} 日
+                            </div>
+                          )}
+                          <div className="badges-row">
+                            {isLow ? <span className="low-badge">要購入</span> : <span className="soon-badge">⚠️ そろそろ</span>}
                           </div>
-                          {isLow ? <span className="low-badge">要購入</span> : <span className="soon-badge">⚠️ そろそろ</span>}
                         </div>
                         <div className="stock-area">
                           <div className={`stock-num ${isLow ? "low" : ""}`}>{item.stock}</div>
@@ -288,7 +313,7 @@ export default function App() {
           )}
 
           {/* 通常タブ */}
-          {activeTab !== "soon" && (
+          {activeTab !== "soon" && activeTab !== "shop" && (
             <>
               {activeItems.length === 0 && !editMode
                 ? <div className="empty"><div className="empty-icon">📦</div><div>アイテムがありません</div><div style={{ fontSize: 12, marginTop: 6 }}>下の「編集」から追加できます</div></div>
@@ -370,7 +395,7 @@ export default function App() {
           addItem={addItem} updateItem={updateItem}
           addPurchase={addPurchase} reuseHistory={reuseHistory} deleteHistory={deleteHistory}
           onScanFound={onScanFound}
-          shopItems={shopItems} toast_={toast_}
+          toast_={toast_}
           resetAllData={resetAllData} />
       )}
 
