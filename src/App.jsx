@@ -1,13 +1,47 @@
 import { useState, useEffect } from "react";
 import {
   DEFAULT_CATEGORIES, DEFAULT_ITEMS,
-  STORAGE_CATS, STORAGE_ITEMS,
+  STORAGE_CATS, STORAGE_ITEMS, LEGACY_KEYS,
   nextId, calcPrediction,
 } from "./constants.js";
 import CSS from "./styles.js";
 import { ModalLayer } from "./components.jsx";
 
 const SOON_DAYS = 7;
+
+// ── ストレージ読み込み（旧キーからの移行対応）────────────────────────
+async function loadStorage() {
+  try {
+    // まず現行キーを試みる
+    const [cr, ir] = await Promise.allSettled([
+      window.storage.get(STORAGE_CATS),
+      window.storage.get(STORAGE_ITEMS),
+    ]);
+    if (cr.status === "fulfilled" && cr.value && ir.status === "fulfilled" && ir.value) {
+      return {
+        cats:  JSON.parse(cr.value.value),
+        items: JSON.parse(ir.value.value),
+      };
+    }
+    // 旧キーを順番に試みる
+    for (const legacy of LEGACY_KEYS) {
+      const [lc, li] = await Promise.allSettled([
+        window.storage.get(legacy.cats),
+        window.storage.get(legacy.items),
+      ]);
+      if (lc.status === "fulfilled" && lc.value && li.status === "fulfilled" && li.value) {
+        const cats  = JSON.parse(lc.value.value);
+        const items = JSON.parse(li.value.value);
+        // 現行キーに移行保存
+        await window.storage.set(STORAGE_CATS,  JSON.stringify(cats));
+        await window.storage.set(STORAGE_ITEMS, JSON.stringify(items));
+        console.log(`Migrated from ${legacy.cats}`);
+        return { cats, items };
+      }
+    }
+  } catch {}
+  return null; // 何もなければデフォルト
+}
 
 export default function App() {
   const [cats,      setCats]      = useState(null);
@@ -20,18 +54,15 @@ export default function App() {
   // ── 初期ロード ────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      try {
-        const [cr, ir] = await Promise.allSettled([
-          window.storage.get(STORAGE_CATS),
-          window.storage.get(STORAGE_ITEMS),
-        ]);
-        const c = cr.status === "fulfilled" && cr.value
-          ? JSON.parse(cr.value.value) : DEFAULT_CATEGORIES;
-        const i = ir.status === "fulfilled" && ir.value
-          ? JSON.parse(ir.value.value) : DEFAULT_ITEMS;
-        setCats(c); setItems(i); setActiveTab(c[0]?.id);
-      } catch {
-        setCats(DEFAULT_CATEGORIES); setItems(DEFAULT_ITEMS); setActiveTab("kitchen");
+      const saved = await loadStorage();
+      if (saved) {
+        setCats(saved.cats);
+        setItems(saved.items);
+        setActiveTab(saved.cats[0]?.id);
+      } else {
+        setCats(DEFAULT_CATEGORIES);
+        setItems(DEFAULT_ITEMS);
+        setActiveTab("kitchen");
       }
     })();
   }, []);
@@ -39,7 +70,7 @@ export default function App() {
   // ── 保存 ──────────────────────────────────────────────────────────
   const saveCats  = async (c) => { setCats(c);  try { await window.storage.set(STORAGE_CATS,  JSON.stringify(c)); } catch {} };
   const saveItems = async (i) => { setItems(i); try { await window.storage.set(STORAGE_ITEMS, JSON.stringify(i)); } catch {} };
-  const toast_    = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2200); };
+  const toast_    = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2400); };
 
   // ── 在庫操作 ──────────────────────────────────────────────────────
   const adjustStock = (catId, itemId, delta) => {
@@ -68,7 +99,10 @@ export default function App() {
     saveItems({ ...items, [id]: [] });
     setActiveTab(id); setModal(null); toast_("カテゴリーを追加しました");
   };
-  const updateCat = (cat) => { saveCats(cats.map(c => c.id === cat.id ? cat : c)); setModal(null); toast_("更新しました"); };
+  const updateCat = (cat) => {
+    saveCats(cats.map(c => c.id === cat.id ? cat : c));
+    setModal(null); toast_("更新しました");
+  };
   const deleteCat = (catId) => {
     if (cats.length <= 1) { toast_("最低1つ必要です", "warn"); return; }
     const nc = cats.filter(c => c.id !== catId);
@@ -87,9 +121,12 @@ export default function App() {
     saveItems({ ...items, [catId]: items[catId].map(i => i.id === d.id ? { ...i, ...d, stock: +d.stock, threshold: +d.threshold } : i) });
     setModal(null); toast_("更新しました");
   };
-  const deleteItem = (catId, itemId) => { saveItems({ ...items, [catId]: items[catId].filter(i => i.id !== itemId) }); toast_("削除しました"); };
+  const deleteItem = (catId, itemId) => {
+    saveItems({ ...items, [catId]: items[catId].filter(i => i.id !== itemId) });
+    toast_("削除しました");
+  };
 
-  // ── 購入記録（日付・本数対応）────────────────────────────────────
+  // ── 購入記録 ──────────────────────────────────────────────────────
   const addPurchase = (catId, itemId, record) => {
     const qty     = record.qty || 1;
     const dateStr = record.buyDate
@@ -103,7 +140,6 @@ export default function App() {
         const favorite = rec.isFavorite
           ? { name: rec.name, brand: rec.brand, imageUrl: rec.imageUrl }
           : i.favorite;
-        // 購入本数分だけ在庫に加算
         return { ...i, stock: i.stock + qty, history: [rec, ...(i.history || [])], favorite };
       }),
     };
@@ -125,15 +161,14 @@ export default function App() {
     });
   };
 
-  // ── 購入履歴削除（在庫を購入本数分戻す）────────────────────────
+  // ── 購入履歴削除 ──────────────────────────────────────────────────
   const deleteHistory = (catId, itemId, histId, qty) => {
     const ni = {
       ...items,
       [catId]: items[catId].map(i => {
         if (i.id !== itemId) return i;
         const newHistory = (i.history || []).filter(h => h.id !== histId);
-        // 在庫を購入本数分戻す（0未満にはしない）
-        const newStock = Math.max(0, i.stock - qty);
+        const newStock   = Math.max(0, i.stock - qty);
         return { ...i, history: newHistory, stock: newStock };
       }),
     };
@@ -143,12 +178,18 @@ export default function App() {
     toast_("削除しました");
   };
 
-  // ── バーコードスキャン結果 → アイテム追加モーダルへ ───────────────
+  // ── バーコードスキャン ────────────────────────────────────────────
   const onScanFound = (catId, scanResult) => {
-    setModal({
-      type: "addItem", catId,
-      prefill: { name: scanResult.name, brand: scanResult.brand, unit: scanResult.unit || "個" },
-    });
+    setModal({ type: "addItem", catId, prefill: { name: scanResult.name, brand: scanResult.brand, unit: scanResult.unit || "個" } });
+  };
+
+  // ── データリセット ────────────────────────────────────────────────
+  const resetAllData = async () => {
+    saveCats(DEFAULT_CATEGORIES);
+    saveItems(DEFAULT_ITEMS);
+    setActiveTab("kitchen");
+    setModal(null);
+    toast_("データをリセットしました");
   };
 
   // ── ローディング ──────────────────────────────────────────────────
@@ -167,22 +208,26 @@ export default function App() {
     ? soonItems
     : (items[activeTab] || []).map(item => ({ ...item, pred: calcPrediction(item) }));
 
-  // ── レンダー ──────────────────────────────────────────────────────
   return (
     <>
-      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Zen+Kaku Gothic New:wght@400;700&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" rel="stylesheet" />
       <style>{CSS}</style>
       <div className="app">
 
+        {/* ヘッダー */}
         <header className="header">
           <div className="header-top">
             <div className="header-title">🏠 在庫管理</div>
             <div className="header-right">
-              {/* 統計ボタン */}
-              <button className="stats-btn" onClick={() => setModal({ type: "stats" })} title="消費統計">📊</button>
-              <button className="add-cat-btn" onClick={() => setModal({ type: "addCat" })}>＋ カテゴリー</button>
-              <button className="shop-btn" onClick={() => setModal({ type: "shopping" })}>
-                🛒{shopItems.length > 0 && <span className="badge">{shopItems.length}</span>}
+              {/* 買い物リストバッジ（件数だけ見せる） */}
+              {shopItems.length > 0 && (
+                <div className="shop-count-badge" onClick={() => setModal({ type: "settings" })}>
+                  🛒 {shopItems.length}件
+                </div>
+              )}
+              {/* 設定ボタン1つに統合 */}
+              <button className="settings-btn" onClick={() => setModal({ type: "settings" })}>
+                ⚙️ 設定
               </button>
             </div>
           </div>
@@ -190,7 +235,7 @@ export default function App() {
             {soonItems.length > 0 && (
               <button className={`tab alert ${activeTab === "soon" ? "active" : ""}`}
                 onClick={() => { setActiveTab("soon"); setEditMode(false); }}>
-                ⚠️ あと{SOON_DAYS}日
+                ⚠️ もうすぐ切れる
               </button>
             )}
             {cats.map(cat => (
@@ -202,6 +247,7 @@ export default function App() {
           </div>
         </header>
 
+        {/* コンテンツ */}
         <div className="content">
 
           {/* そろそろ切れるタブ */}
@@ -222,8 +268,7 @@ export default function App() {
                           <div className={`pred-text ${item.pred.daysLeft <= 3 ? "warn" : ""}`}>
                             あと約 {item.pred.daysLeft} 日
                           </div>
-                          {isLow  ? <span className="low-badge">要購入</span>
-                                  : <span className="soon-badge">⚠️ そろそろ</span>}
+                          {isLow ? <span className="low-badge">要購入</span> : <span className="soon-badge">⚠️ そろそろ</span>}
                         </div>
                         <div className="stock-area">
                           <div className={`stock-num ${isLow ? "low" : ""}`}>{item.stock}</div>
@@ -309,7 +354,7 @@ export default function App() {
                       <div className="edit-panel-row">
                         <button className="btn-add-item" onClick={() => setModal({ type: "addItem", catId: activeTab })}>＋ アイテムを追加</button>
                         <button className="btn-scan" onClick={() => setModal({ type: "scan", catId: activeTab })}>📷 スキャン</button>
-                        <button className="btn-cat-settings" onClick={() => setModal({ type: "editCat", cat: { ...activeCat } })}>⚙️ 設定</button>
+                        <button className="btn-cat-settings" onClick={() => setModal({ type: "editCat", cat: { ...activeCat } })}>⚙️</button>
                       </div>
                       <button className="btn-done" onClick={() => setEditMode(false)}>完了</button>
                     </div>}
@@ -325,7 +370,8 @@ export default function App() {
           addItem={addItem} updateItem={updateItem}
           addPurchase={addPurchase} reuseHistory={reuseHistory} deleteHistory={deleteHistory}
           onScanFound={onScanFound}
-          shopItems={shopItems} toast_={toast_} />
+          shopItems={shopItems} toast_={toast_}
+          resetAllData={resetAllData} />
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
