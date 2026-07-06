@@ -560,89 +560,74 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
 
 
 // ─── 設定モーダル ────────────────────────────────────────────────────
-export function SettingsModal({ cats, shopItems, setModal, onClose, resetAllData, toast_ }) {
+export function SettingsModal({ cats, setModal, onClose, resetAllData }) {
   const [confirmReset, setConfirmReset] = useState(false);
 
-  const copy = () => {
-    const text = shopItems.map(i => {
-      const fav  = i.favorite;
-      const last = i.history?.[0];
-      const rec  = fav ? ` ⭐推奨: ${fav.brand || fav.name}` : last ? ` 前回: ${last.brand || last.name}` : "";
-      return `・${i.name}（残り${i.stock}${i.unit}）${rec}`;
-    }).join("\n");
-    navigator.clipboard?.writeText(text).then(() => { toast_("コピーしました"); onClose(); });
-  };
+  const menuItems = [
+    {
+      icon: "📂",
+      label: "カテゴリー管理",
+      sub: `${cats.length}件`,
+      action: () => setModal({ type: "catManager" }),
+    },
+    {
+      icon: "📊",
+      label: "消費統計",
+      sub: "過去6ヶ月",
+      action: () => setModal({ type: "stats" }),
+    },
+  ];
 
   return <>
     <div className="modal-title">⚙️ 設定</div>
 
-    {/* 買い物リスト */}
-    <div className="settings-section">
-      <div className="settings-label">🛒 買い物リスト</div>
-      {shopItems.length === 0
-        ? <div className="settings-empty-note">要購入のアイテムはありません</div>
-        : shopItems.map(item => {
-            const fav  = item.favorite;
-            const last = item.history?.[0];
-            return (
-              <div key={`${item.cat?.id}-${item.id}`} className="shop-item">
-                <div className="shop-dot" style={{ background: item.cat?.color || "#888" }} />
-                <div>
-                  <div className="shop-name">{item.name}</div>
-                  <div className="shop-info">{item.cat?.icon} {item.cat?.label} · 残り {item.stock}{item.unit}</div>
-                  {fav  && <div className="shop-fav">⭐ 推奨: {fav.brand ? `${fav.name}（${fav.brand}）` : fav.name}</div>}
-                  {!fav && last && <div className="shop-last">前回: {last.brand || last.name}</div>}
-                </div>
-              </div>
-            );
-          })}
-      {shopItems.length > 0 && (
-        <button className="btn-primary" style={{ marginTop: 8 }} onClick={copy}>📋 リストをコピー</button>
-      )}
-    </div>
-
-    <div className="settings-divider" />
-
-    {/* カテゴリー管理 */}
-    <div className="settings-section">
-      <div className="settings-label">📂 カテゴリー管理</div>
-      {cats.map(cat => (
-        <div key={cat.id} className="settings-cat-row">
-          <span>{cat.icon} {cat.label}</span>
-        </div>
+    <div className="settings-menu">
+      {menuItems.map((m, i) => (
+        <button key={i} className="settings-menu-row" onClick={m.action}>
+          <span className="settings-menu-icon">{m.icon}</span>
+          <span className="settings-menu-label">{m.label}</span>
+          <span className="settings-menu-sub">{m.sub}</span>
+          <span className="settings-menu-arrow">›</span>
+        </button>
       ))}
-      <button className="btn-primary" style={{ marginTop: 8 }}
-        onClick={() => setModal({ type: "addCat" })}>
-        ＋ カテゴリーを追加
-      </button>
     </div>
 
-    <div className="settings-divider" />
-
-    {/* 消費統計 */}
-    <div className="settings-section">
-      <div className="settings-label">📊 消費統計</div>
-      <button className="settings-action-btn"
-        onClick={() => setModal({ type: "stats" })}>
-        統計を見る →
-      </button>
-    </div>
-
-    <div className="settings-divider" />
+    <div className="settings-divider" style={{ margin: "16px 0" }} />
 
     {/* データ管理 */}
-    <div className="settings-section">
-      <div className="settings-label">🗂️ データ管理</div>
-      {!confirmReset
-        ? <button className="btn-danger" onClick={() => setConfirmReset(true)}>
-            すべてのデータをリセット
-          </button>
-        : <button className="btn-danger" style={{ fontWeight: 800 }} onClick={resetAllData}>
-            ⚠️ リセットを確定する（元に戻せません）
-          </button>}
-    </div>
+    <div className="settings-label">🗂️ データ管理</div>
+    {!confirmReset
+      ? <button className="btn-danger" onClick={() => setConfirmReset(true)}>
+          すべてのデータをリセット
+        </button>
+      : <button className="btn-danger" style={{ fontWeight: 800 }} onClick={resetAllData}>
+          ⚠️ リセットを確定する（元に戻せません）
+        </button>}
 
-    <button className="btn-cancel" style={{ marginTop: 16 }} onClick={onClose}>閉じる</button>
+    <button className="btn-cancel" style={{ marginTop: 12 }} onClick={onClose}>閉じる</button>
+  </>;
+}
+
+// ─── カテゴリー管理モーダル ──────────────────────────────────────────
+export function CatManagerModal({ cats, setModal, onClose }) {
+  return <>
+    <div className="modal-title">📂 カテゴリー管理</div>
+    <div className="settings-menu">
+      {cats.map(cat => (
+        <button key={cat.id} className="settings-menu-row"
+          onClick={() => setModal({ type: "editCat", cat: { ...cat } })}>
+          <span className="settings-menu-icon">{cat.icon}</span>
+          <span className="settings-menu-label">{cat.label}</span>
+          <span className="settings-menu-sub" />
+          <span className="settings-menu-arrow">›</span>
+        </button>
+      ))}
+    </div>
+    <button className="btn-primary" style={{ marginTop: 12 }}
+      onClick={() => setModal({ type: "addCat" })}>
+      ＋ カテゴリーを追加
+    </button>
+    <button className="btn-cancel" onClick={onClose}>閉じる</button>
   </>;
 }
 
@@ -691,7 +676,7 @@ export function ModalLayer({
   addItem, updateItem,
   addPurchase, reuseHistory, deleteHistory,
   onScanFound,
-  shopItems, toast_,
+  toast_,
   resetAllData,
 }) {
   return (
@@ -707,7 +692,8 @@ export function ModalLayer({
         {modal.type === "shopping"    && <ShoppingModal shopItems={shopItems} onClose={() => setModal(null)} toast_={toast_} />}
         {modal.type === "scan"        && <ScanModal catId={modal.catId} onItemFound={onScanFound} onClose={() => setModal(null)} />}
         {modal.type === "stats"       && <StatsModal cats={cats} items={items} onClose={() => setModal(null)} />}
-        {modal.type === "settings"    && <SettingsModal cats={cats} shopItems={shopItems} setModal={setModal} onClose={() => setModal(null)} resetAllData={resetAllData} toast_={toast_} />}
+        {modal.type === "settings"    && <SettingsModal cats={cats} setModal={setModal} onClose={() => setModal(null)} resetAllData={resetAllData} />}
+        {modal.type === "catManager"  && <CatManagerModal cats={cats} setModal={setModal} onClose={() => setModal(null)} />}
       </div>
     </div>
   );
