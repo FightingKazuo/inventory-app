@@ -89,9 +89,13 @@ export default function App() {
   };
   const deleteItem = (catId, itemId) => { saveItems({ ...items, [catId]: items[catId].filter(i => i.id !== itemId) }); toast_("削除しました"); };
 
-  // ── 購入記録 ──────────────────────────────────────────────────────
+  // ── 購入記録（日付・本数対応）────────────────────────────────────
   const addPurchase = (catId, itemId, record) => {
-    const rec = { id: Date.now(), date: new Date().toLocaleDateString("ja-JP"), ...record };
+    const qty     = record.qty || 1;
+    const dateStr = record.buyDate
+      ? new Date(record.buyDate).toLocaleDateString("ja-JP")
+      : new Date().toLocaleDateString("ja-JP");
+    const rec = { id: Date.now(), date: dateStr, qty, ...record };
     const ni = {
       ...items,
       [catId]: items[catId].map(i => {
@@ -99,13 +103,14 @@ export default function App() {
         const favorite = rec.isFavorite
           ? { name: rec.name, brand: rec.brand, imageUrl: rec.imageUrl }
           : i.favorite;
-        return { ...i, history: [rec, ...(i.history || [])], favorite };
+        // 購入本数分だけ在庫に加算
+        return { ...i, stock: i.stock + qty, history: [rec, ...(i.history || [])], favorite };
       }),
     };
     saveItems(ni);
     const updated = ni[catId].find(i => i.id === itemId);
     setModal({ type: "history", catId, item: updated });
-    toast_("記録しました");
+    toast_(`記録しました（+${qty}${updated.unit}）`);
   };
 
   // ── 履歴再登録 ────────────────────────────────────────────────────
@@ -118,6 +123,24 @@ export default function App() {
         memo: histRecord.memo || "", isFavorite: histRecord.isFavorite || false,
       },
     });
+  };
+
+  // ── 購入履歴削除（在庫を購入本数分戻す）────────────────────────
+  const deleteHistory = (catId, itemId, histId, qty) => {
+    const ni = {
+      ...items,
+      [catId]: items[catId].map(i => {
+        if (i.id !== itemId) return i;
+        const newHistory = (i.history || []).filter(h => h.id !== histId);
+        // 在庫を購入本数分戻す（0未満にはしない）
+        const newStock = Math.max(0, i.stock - qty);
+        return { ...i, history: newHistory, stock: newStock };
+      }),
+    };
+    saveItems(ni);
+    const updated = ni[catId].find(i => i.id === itemId);
+    setModal({ type: "history", catId, item: updated });
+    toast_("削除しました");
   };
 
   // ── バーコードスキャン結果 → アイテム追加モーダルへ ───────────────
@@ -300,7 +323,7 @@ export default function App() {
         <ModalLayer modal={modal} setModal={setModal} cats={cats} items={items}
           addCat={addCat} updateCat={updateCat} deleteCat={deleteCat}
           addItem={addItem} updateItem={updateItem}
-          addPurchase={addPurchase} reuseHistory={reuseHistory}
+          addPurchase={addPurchase} reuseHistory={reuseHistory} deleteHistory={deleteHistory}
           onScanFound={onScanFound}
           shopItems={shopItems} toast_={toast_} />
       )}
