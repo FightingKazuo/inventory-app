@@ -148,6 +148,13 @@ body { background: #F7F4EF; }
 .bar-val   { font-size: 11px; color: white; font-weight: 700; }
 .stats-empty { text-align: center; padding: 40px 20px; color: #A89E94; font-size: 13px; line-height: 2; }
 
+/* ── 履歴アイテム（削除ボタン付き）── */
+.history-item-wrap { display: flex; align-items: flex-start; border-bottom: 1px solid #F7F4EF; }
+.history-item-wrap:last-child { border-bottom: none; }
+.history-item-wrap .history-item { border-bottom: none; flex: 1; }
+.hist-del-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 12px 4px; color: #C4BEB8; flex-shrink: 0; opacity: 0.6; transition: opacity 0.15s; }
+.hist-del-btn:active { opacity: 1; color: #E8734A; }
+
 /* ── トースト ── */
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2D2926; color: white; padding: 10px 20px; border-radius: 20px; font-size: 13px; font-family: 'Noto Sans JP', sans-serif; z-index: 999; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.2); animation: fup 0.3s ease; }
 .toast.warn { background: #E8734A; }
