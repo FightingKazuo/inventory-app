@@ -399,13 +399,21 @@ export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClo
     <div className="modal-sub">商品のバーコードにカメラを向けてください</div>
 
     {(status === "init" || status === "scanning") && (
-      <div className="video-scanner-wrap">
-        <video ref={videoRef} className="video-scanner" playsInline muted autoPlay />
-        <div className="scan-guide-line" />
-        <div className="scan-guide-text">
+      <>
+        <p style={{ fontSize: 12, color: "#A89E94", textAlign: "center", marginBottom: 8 }}>
           {status === "init" ? "カメラを起動中..." : "バーコードを赤いラインに合わせてください"}
+        </p>
+        <div style={{ position: "relative", width: "100%", height: 220, borderRadius: 14, overflow: "hidden", background: "#111", marginBottom: 12 }}>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            autoPlay
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+          <div style={{ position: "absolute", top: "50%", left: "8%", right: "8%", height: 2, background: "#E8734A", transform: "translateY(-50%)", boxShadow: "0 0 8px #E8734A" }} />
         </div>
-      </div>
+      </>
     )}
 
     {loading && <div className="searching" style={{ marginTop: 16 }}>🔍 商品情報を取得中...</div>}
@@ -415,7 +423,7 @@ export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClo
         <div className="scan-result-card" style={{ marginTop: 12 }}>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
             <ProductImage url={result.imageUrl} size={60} />
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="scan-result-name">{result.name}</div>
               {result.brand && <div className="scan-result-sub">{result.brand}</div>}
               {result.description && <div className="scan-result-sub" style={{ marginTop: 4 }}>{result.description}</div>}
@@ -425,8 +433,8 @@ export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClo
         <button className="btn-primary" style={{ marginTop: 8 }}
           onClick={() => {
             stopCamera();
-            if (onScanResult) { onScanResult(result); }         // 購入記録から呼ばれた場合
-            else if (onItemFound) { onItemFound(catId, result); } // アイテム追加から呼ばれた場合
+            if (onScanResult) onScanResult(result);
+            else if (onItemFound) onItemFound(catId, result);
           }}>
           {onScanResult ? "この商品で記録する" : "このアイテムを追加する"}
         </button>
@@ -443,11 +451,11 @@ export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClo
       </div>
     )}
 
-    <button className="btn-cancel" style={{ marginTop: 12 }}
+    <button className="btn-cancel" style={{ marginTop: 16 }}
       onClick={() => {
         stopCamera();
-        if (onScanClose) { onScanClose(); }
-        else if (onClose) { onClose(); }
+        if (onScanClose) onScanClose();
+        else if (onClose) onClose();
       }}>
       閉じる
     </button>
