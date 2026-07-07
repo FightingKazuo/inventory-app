@@ -101,7 +101,6 @@ body { background: #F7F4EF; }
 .btn-fav.active { background: #FFF8D0; border-color: #F9E84A; }
 
 /* ── 購入記録メタ行 ── */
-.purchase-meta-row { display: flex; gap: 10px; margin-top: 12px; margin-bottom: 4px; }
 .purchase-meta-field { flex: 1; min-width: 0; }
 .scan-inline-btn { padding: 11px 13px; background: #4A90D9; color: white; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; flex-shrink: 0; }
 .scan-inline-btn:active { opacity: 0.8; }
