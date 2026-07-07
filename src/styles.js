@@ -100,6 +100,19 @@ body { background: #F7F4EF; }
 .btn-fav { width: 100%; padding: 12px; border: 2px solid #EEE9E2; border-radius: 12px; font-size: 14px; font-family: inherit; cursor: pointer; font-weight: 600; margin-top: 8px; background: white; color: #2D2926; transition: all 0.2s; }
 .btn-fav.active { background: #FFF8D0; border-color: #F9E84A; }
 
+/* ── 購入記録メタ行 ── */
+.purchase-meta-row { display: flex; gap: 10px; margin-top: 12px; margin-bottom: 4px; }
+.purchase-meta-field { flex: 1; min-width: 0; }
+.scan-inline-btn { padding: 11px 13px; background: #4A90D9; color: white; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; flex-shrink: 0; }
+.scan-inline-btn:active { opacity: 0.8; }
+
+/* ── バーコードスキャン（video直接制御）── */
+.video-scanner-wrap { position: relative; width: 100%; height: 220px; border-radius: 14px; overflow: hidden; background: #000; margin-bottom: 4px; }
+.video-scanner { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-guide-line { position: absolute; top: 50%; left: 10%; width: 80%; height: 2px; background: #E8734A; transform: translateY(-50%); box-shadow: 0 0 8px #E8734A; animation: scanpulse 1.5s ease-in-out infinite; }
+.scan-guide-text { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12px; color: rgba(255,255,255,0.85); font-family: 'Noto Sans JP', sans-serif; }
+@keyframes scanpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
 /* ── バーコードスキャン ── */
 .scanner-wrap { border-radius: 14px; overflow: hidden; margin-bottom: 12px; background: #000; min-height: 240px; display: flex; align-items: center; justify-content: center; }
 .scanner-hint { font-size: 12px; color: #A89E94; text-align: center; margin-bottom: 12px; line-height: 1.7; }
@@ -122,7 +135,7 @@ body { background: #F7F4EF; }
 .hist-reuse-hint { font-size: 11px; color: #A89E94; text-align: center; margin-top: 4px; margin-bottom: 8px; }
 
 /* ── 商品検索 ── */
-.search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.search-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: stretch; }
 .search-input { flex: 1; border: 2px solid #EEE9E2; border-radius: 10px; padding: 11px 13px; font-size: 14px; font-family: inherit; outline: none; background: #F7F4EF; transition: border-color 0.2s; }
 .search-input:focus { border-color: #2D2926; background: white; }
 .search-btn { padding: 11px 14px; background: #2D2926; color: white; border: none; border-radius: 10px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 700; white-space: nowrap; }
