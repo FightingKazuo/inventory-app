@@ -9,38 +9,28 @@ import { ModalLayer } from "./components.jsx";
 
 const SOON_DAYS = 7;
 
-// ── ストレージ読み込み（旧キーからの移行対応）────────────────────────
-async function loadStorage() {
+// ── ストレージ読み込み（localStorage）───────────────────────────────
+function loadStorage() {
   try {
-    // まず現行キーを試みる
-    const [cr, ir] = await Promise.allSettled([
-      window.storage.get(STORAGE_CATS),
-      window.storage.get(STORAGE_ITEMS),
-    ]);
-    if (cr.status === "fulfilled" && cr.value && ir.status === "fulfilled" && ir.value) {
-      return {
-        cats:  JSON.parse(cr.value.value),
-        items: JSON.parse(ir.value.value),
-      };
+    const cRaw = localStorage.getItem(STORAGE_CATS);
+    const iRaw = localStorage.getItem(STORAGE_ITEMS);
+    if (cRaw && iRaw) {
+      return { cats: JSON.parse(cRaw), items: JSON.parse(iRaw) };
     }
-    // 旧キーを順番に試みる
+    // 旧キーからの移行
     for (const legacy of LEGACY_KEYS) {
-      const [lc, li] = await Promise.allSettled([
-        window.storage.get(legacy.cats),
-        window.storage.get(legacy.items),
-      ]);
-      if (lc.status === "fulfilled" && lc.value && li.status === "fulfilled" && li.value) {
-        const cats  = JSON.parse(lc.value.value);
-        const items = JSON.parse(li.value.value);
-        // 現行キーに移行保存
-        await window.storage.set(STORAGE_CATS,  JSON.stringify(cats));
-        await window.storage.set(STORAGE_ITEMS, JSON.stringify(items));
-        console.log(`Migrated from ${legacy.cats}`);
+      const lc = localStorage.getItem(legacy.cats);
+      const li = localStorage.getItem(legacy.items);
+      if (lc && li) {
+        const cats  = JSON.parse(lc);
+        const items = JSON.parse(li);
+        localStorage.setItem(STORAGE_CATS,  JSON.stringify(cats));
+        localStorage.setItem(STORAGE_ITEMS, JSON.stringify(items));
         return { cats, items };
       }
     }
   } catch {}
-  return null; // 何もなければデフォルト
+  return null;
 }
 
 export default function App() {
@@ -53,23 +43,21 @@ export default function App() {
 
   // ── 初期ロード ────────────────────────────────────────────────────
   useEffect(() => {
-    (async () => {
-      const saved = await loadStorage();
-      if (saved) {
-        setCats(saved.cats);
-        setItems(saved.items);
-        setActiveTab("shop");
-      } else {
-        setCats(DEFAULT_CATEGORIES);
-        setItems(DEFAULT_ITEMS);
-        setActiveTab("shop");
-      }
-    })();
+    const saved = loadStorage();
+    if (saved) {
+      setCats(saved.cats);
+      setItems(saved.items);
+      setActiveTab("shop");
+    } else {
+      setCats(DEFAULT_CATEGORIES);
+      setItems(DEFAULT_ITEMS);
+      setActiveTab("shop");
+    }
   }, []);
 
   // ── 保存 ──────────────────────────────────────────────────────────
-  const saveCats  = async (c) => { setCats(c);  try { await window.storage.set(STORAGE_CATS,  JSON.stringify(c)); } catch {} };
-  const saveItems = async (i) => { setItems(i); try { await window.storage.set(STORAGE_ITEMS, JSON.stringify(i)); } catch {} };
+  const saveCats  = (c) => { setCats(c);  try { localStorage.setItem(STORAGE_CATS,  JSON.stringify(c)); } catch {} };
+  const saveItems = (i) => { setItems(i); try { localStorage.setItem(STORAGE_ITEMS, JSON.stringify(i)); } catch {} };
   const toast_    = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2400); };
 
   // ── 在庫操作 ──────────────────────────────────────────────────────
