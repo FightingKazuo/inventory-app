@@ -271,30 +271,39 @@ export function EditItemModal({ catId, item, onSave, onClose }) {
   </>;
 }
 
-// ─── バーコードスキャンモーダル（BarcodeDetector / video直接制御）──
+// ─── バーコードスキャンモーダル（ZXing ベース・全ブラウザ対応）────
 export function ScanModal({ catId, onItemFound, onClose }) {
   const videoRef    = useRef(null);
   const streamRef   = useRef(null);
-  const rafRef      = useRef(null);
-  const [status,  setStatus]  = useState("init"); // init | scanning | found | error | unsupported
+  const readerRef   = useRef(null);
+  const [status,  setStatus]  = useState("init"); // init | scanning | found | error
   const [loading, setLoading] = useState(false);
   const [result,  setResult]  = useState(null);
-  const [scanned, setScanned] = useState(null); // スキャン済みコード
 
   const stopCamera = () => {
-    cancelAnimationFrame(rafRef.current);
+    if (readerRef.current) {
+      try { readerRef.current.reset(); } catch {}
+      readerRef.current = null;
+    }
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   };
 
   useEffect(() => {
+    let active = true;
     (async () => {
-      // BarcodeDetector 対応チェック
-      if (!("BarcodeDetector" in window)) {
-        setStatus("unsupported");
-        return;
-      }
       try {
+        // ZXing をCDNから動的ロード
+        if (!window.ZXing) {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            s.src = "https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/umd/index.min.js";
+            s.onload = resolve; s.onerror = reject;
+            document.head.appendChild(s);
+          });
+        }
+        if (!active) return;
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
         });
@@ -303,37 +312,55 @@ export function ScanModal({ catId, onItemFound, onClose }) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
         }
+
+        const hints = new Map();
+        const formats = [
+          window.ZXing.BarcodeFormat.EAN_13,
+          window.ZXing.BarcodeFormat.EAN_8,
+          window.ZXing.BarcodeFormat.CODE_128,
+          window.ZXing.BarcodeFormat.UPC_A,
+          window.ZXing.BarcodeFormat.UPC_E,
+        ];
+        hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+        const reader = new window.ZXing.MultiFormatReader();
+        reader.setHints(hints);
+        readerRef.current = reader;
+
         setStatus("scanning");
 
-        const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e"] });
+        const canvas = document.createElement("canvas");
+        const ctx    = canvas.getContext("2d");
 
-        const scan = async () => {
-          if (!videoRef.current || videoRef.current.readyState < 2) {
-            rafRef.current = requestAnimationFrame(scan);
-            return;
-          }
+        const scan = () => {
+          if (!active || !videoRef.current) return;
+          const v = videoRef.current;
+          if (v.readyState < 2) { requestAnimationFrame(scan); return; }
+          canvas.width  = v.videoWidth;
+          canvas.height = v.videoHeight;
+          ctx.drawImage(v, 0, 0);
           try {
-            const codes = await detector.detect(videoRef.current);
-            if (codes.length > 0) {
-              const code = codes[0].rawValue;
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const lum = new window.ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+            const bmp = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
+            const res = reader.decode(bmp);
+            if (res && active) {
+              active = false;
               stopCamera();
-              setScanned(code);
               setStatus("found");
               setLoading(true);
-              await lookupBarcode(code);
-              setLoading(false);
-              return;
+              lookupBarcode(res.getText());
             }
-          } catch {}
-          rafRef.current = requestAnimationFrame(scan);
+          } catch {
+            requestAnimationFrame(scan);
+          }
         };
-        rafRef.current = requestAnimationFrame(scan);
+        requestAnimationFrame(scan);
 
-      } catch {
-        setStatus("error");
+      } catch(e) {
+        if (active) setStatus("error");
       }
     })();
-    return () => stopCamera();
+    return () => { active = false; stopCamera(); };
   }, []);
 
   const lookupBarcode = async (code) => {
@@ -354,58 +381,35 @@ export function ScanModal({ catId, onItemFound, onClose }) {
       const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
       const s = text.indexOf("{"), e = text.lastIndexOf("}");
       if (s !== -1 && e !== -1) {
-        try { setResult(JSON.parse(text.slice(s, e + 1))); return; } catch {}
+        try { setResult(JSON.parse(text.slice(s, e + 1))); setLoading(false); return; } catch {}
       }
     } catch {}
-    setResult({ name: `JANコード: ${code}`, brand: "", unit: "個", description: "", imageUrl: null });
+    setResult({ name: `不明な商品`, brand: "", unit: "個", description: "", imageUrl: null });
+    setLoading(false);
   };
 
-  const retry = async () => {
-    setResult(null); setScanned(null); setStatus("init"); setLoading(false);
-    // カメラ再起動
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setStatus("scanning");
-      const detector = new BarcodeDetector({ formats: ["ean_13","ean_8","code_128","code_39","upc_a","upc_e"] });
-      const scan = async () => {
-        if (!videoRef.current || videoRef.current.readyState < 2) { rafRef.current = requestAnimationFrame(scan); return; }
-        try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes.length > 0) {
-            const code = codes[0].rawValue;
-            stopCamera(); setScanned(code); setStatus("found"); setLoading(true);
-            await lookupBarcode(code); setLoading(false); return;
-          }
-        } catch {}
-        rafRef.current = requestAnimationFrame(scan);
-      };
-      rafRef.current = requestAnimationFrame(scan);
-    } catch { setStatus("error"); }
+  const retry = () => {
+    setResult(null); setStatus("init"); setLoading(false);
+    // useEffect を再実行するためにコンポーネントをリマウント — 親で key を変えるか、ページリロード
+    window.location.reload();
   };
 
   return <>
     <div className="modal-title">📷 バーコードをスキャン</div>
     <div className="modal-sub">商品のバーコードにカメラを向けてください</div>
 
-    {/* カメラビュー */}
-    {(status === "scanning" || status === "init") && (
+    {(status === "init" || status === "scanning") && (
       <div className="video-scanner-wrap">
         <video ref={videoRef} className="video-scanner" playsInline muted autoPlay />
         <div className="scan-guide-line" />
-        <div className="scan-guide-text">バーコードを枠内に合わせてください</div>
+        <div className="scan-guide-text">
+          {status === "init" ? "カメラを起動中..." : "バーコードを赤いラインに合わせてください"}
+        </div>
       </div>
     )}
 
     {loading && <div className="searching" style={{ marginTop: 16 }}>🔍 商品情報を取得中...</div>}
 
-    {/* スキャン結果 */}
     {result && !loading && (
       <>
         <div className="scan-result-card" style={{ marginTop: 12 }}>
@@ -418,7 +422,8 @@ export function ScanModal({ catId, onItemFound, onClose }) {
             </div>
           </div>
         </div>
-        <button className="btn-primary" style={{ marginTop: 8 }} onClick={() => { stopCamera(); onItemFound(catId, result); }}>
+        <button className="btn-primary" style={{ marginTop: 8 }}
+          onClick={() => { stopCamera(); onItemFound(catId, result); }}>
           このアイテムを追加する
         </button>
         <button className="btn-ghost" style={{ marginTop: 8 }} onClick={retry}>
@@ -427,21 +432,17 @@ export function ScanModal({ catId, onItemFound, onClose }) {
       </>
     )}
 
-    {status === "unsupported" && (
-      <div className="stats-empty">
-        このブラウザはバーコードスキャンに対応していません<br />
-        <span style={{ fontSize: 11 }}>iOS17以降のSafariをお使いください</span>
-      </div>
-    )}
-
     {status === "error" && (
       <div className="stats-empty">
         カメラを起動できませんでした<br />
-        <span style={{ fontSize: 11 }}>設定 → Safari → カメラ の許可を確認してください</span>
+        <span style={{ fontSize: 11 }}>設定 → Safari → カメラの許可を確認してください</span>
       </div>
     )}
 
-    <button className="btn-cancel" style={{ marginTop: 12 }} onClick={() => { stopCamera(); onClose(); }}>閉じる</button>
+    <button className="btn-cancel" style={{ marginTop: 12 }}
+      onClick={() => { stopCamera(); onClose(); }}>
+      閉じる
+    </button>
   </>;
 }
 
@@ -595,74 +596,94 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
   const scannerRef  = useRef(null);
   const instanceRef = useRef(null);
 
-  // BarcodeDetector でインラインスキャン
+  // ZXing でインラインスキャン（全ブラウザ対応）
   const inlineVideoRef  = useRef(null);
   const inlineStreamRef = useRef(null);
-  const inlineRafRef    = useRef(null);
+  const inlineActiveRef = useRef(false);
 
   const stopScan = () => {
-    cancelAnimationFrame(inlineRafRef.current);
+    inlineActiveRef.current = false;
     inlineStreamRef.current?.getTracks().forEach(t => t.stop());
     inlineStreamRef.current = null;
     setScanning(false);
   };
 
   const startScan = async () => {
-    if (!("BarcodeDetector" in window)) {
-      alert("このブラウザはバーコードスキャンに対応していません\niOS17以降のSafariをお使いください");
-      return;
-    }
     setScanning(true);
-    setTimeout(async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
+    inlineActiveRef.current = true;
+    try {
+      if (!window.ZXing) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/umd/index.min.js";
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
         });
-        inlineStreamRef.current = stream;
-        if (inlineVideoRef.current) {
-          inlineVideoRef.current.srcObject = stream;
-          await inlineVideoRef.current.play();
-        }
-        const detector = new BarcodeDetector({ formats: ["ean_13","ean_8","code_128","code_39","upc_a","upc_e"] });
-        const scan = async () => {
-          if (!inlineVideoRef.current || inlineVideoRef.current.readyState < 2) {
-            inlineRafRef.current = requestAnimationFrame(scan); return;
-          }
-          try {
-            const codes = await detector.detect(inlineVideoRef.current);
-            if (codes.length > 0) {
-              const code = codes[0].rawValue;
-              stopScan();
-              setLoading(true);
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
+      inlineStreamRef.current = stream;
+      // video要素にセット（少し待ってDOMを確認）
+      await new Promise(r => setTimeout(r, 150));
+      if (inlineVideoRef.current) {
+        inlineVideoRef.current.srcObject = stream;
+        await inlineVideoRef.current.play();
+      }
+      const hints = new Map();
+      hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8,
+        window.ZXing.BarcodeFormat.CODE_128, window.ZXing.BarcodeFormat.UPC_A,
+      ]);
+      const reader = new window.ZXing.MultiFormatReader();
+      reader.setHints(hints);
+      const canvas = document.createElement("canvas");
+      const ctx    = canvas.getContext("2d");
+
+      const scan = () => {
+        if (!inlineActiveRef.current) return;
+        const v = inlineVideoRef.current;
+        if (!v || v.readyState < 2) { requestAnimationFrame(scan); return; }
+        canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+        ctx.drawImage(v, 0, 0);
+        try {
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const lum = new window.ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
+          const bmp = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
+          const res = reader.decode(bmp);
+          if (res && inlineActiveRef.current) {
+            stopScan();
+            const code = res.getText();
+            setLoading(true);
+            (async () => {
               try {
-                const res = await fetch("https://api.anthropic.com/v1/messages", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                const r = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514",
-                    max_tokens: 1000,
+                    model: "claude-sonnet-4-20250514", max_tokens: 1000,
                     tools: [{ type: "web_search_20250305", name: "web_search" }],
-                    system: `日本の商品JANコードを検索して、以下のJSON形式のみを返してください。説明文不要。\n{"name":"商品のフルネーム","brand":"ブランド・メーカー名","description":"40文字以内","imageUrl":"画像URL or null"}`,
+                    system: `日本の商品JANコードを検索して以下のJSON形式のみ返してください。
+{"name":"商品のフルネーム","brand":"ブランド・メーカー名","description":"40文字以内","imageUrl":"画像URL or null"}`,
                     messages: [{ role: "user", content: `JANコード: ${code}` }],
                   }),
                 });
-                const data = await res.json();
-                const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
-                const s = text.indexOf("{"), e = text.lastIndexOf("}");
+                const d = await r.json();
+                const txt = (d.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
+                const s = txt.indexOf("{"), e = txt.lastIndexOf("}");
                 if (s !== -1 && e !== -1) {
-                  const r = JSON.parse(text.slice(s, e + 1));
-                  setResult(r); setQuery(r.name);
+                  const parsed = JSON.parse(txt.slice(s, e + 1));
+                  setResult(parsed); setQuery(parsed.name);
                 }
               } catch {}
               setLoading(false);
-              return;
-            }
-          } catch {}
-          inlineRafRef.current = requestAnimationFrame(scan);
-        };
-        inlineRafRef.current = requestAnimationFrame(scan);
-      } catch { stopScan(); }
-    }, 100);
+            })();
+            return;
+          }
+        } catch {}
+        requestAnimationFrame(scan);
+      };
+      requestAnimationFrame(scan);
+    } catch { stopScan(); }
   };
   const search = async () => {
     if (!query.trim()) return;
@@ -717,10 +738,11 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
 
     {/* インラインスキャナー */}
     {scanning && (
-      <div className="video-scanner-wrap" style={{ marginBottom: 12, height: 160 }}>
-        <video ref={inlineVideoRef} className="video-scanner" playsInline muted autoPlay />
+      <div className="video-scanner-wrap" style={{ marginBottom: 12, height: 180 }}>
+        <video ref={inlineVideoRef} className="video-scanner" playsInline muted />
         <div className="scan-guide-line" />
-        <div className="scan-guide-text">バーコードを枠内に合わせてください</div>
+        <div className="scan-guide-text">バーコードを赤いラインに合わせてください</div>
+        <button onClick={stopScan} style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.5)", border:"none", color:"white", borderRadius:8, padding:"4px 10px", fontSize:13, cursor:"pointer" }}>✕ 閉じる</button>
       </div>
     )}
 
