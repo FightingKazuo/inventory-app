@@ -271,41 +271,69 @@ export function EditItemModal({ catId, item, onSave, onClose }) {
   </>;
 }
 
-// ─── バーコードスキャンモーダル ──────────────────────────────────────
+// ─── バーコードスキャンモーダル（BarcodeDetector / video直接制御）──
 export function ScanModal({ catId, onItemFound, onClose }) {
-  const scannerRef  = useRef(null);
-  const instanceRef = useRef(null);
-  const [status,  setStatus]  = useState("init"); // init | scanning | found | error
+  const videoRef    = useRef(null);
+  const streamRef   = useRef(null);
+  const rafRef      = useRef(null);
+  const [status,  setStatus]  = useState("init"); // init | scanning | found | error | unsupported
   const [loading, setLoading] = useState(false);
   const [result,  setResult]  = useState(null);
+  const [scanned, setScanned] = useState(null); // スキャン済みコード
+
+  const stopCamera = () => {
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  };
 
   useEffect(() => {
-    let scanner;
     (async () => {
+      // BarcodeDetector 対応チェック
+      if (!("BarcodeDetector" in window)) {
+        setStatus("unsupported");
+        return;
+      }
       try {
-        const { Html5QrcodeScanner } = await import("html5-qrcode");
-        scanner = new Html5QrcodeScanner(
-          "qr-reader",
-          { fps: 10, qrbox: { width: 250, height: 120 }, supportedScanTypes: [0] },
-          false
-        );
-        instanceRef.current = scanner;
-        scanner.render(
-          async (decodedText) => {
-            scanner.clear();
-            setStatus("found");
-            setLoading(true);
-            await lookupBarcode(decodedText);
-            setLoading(false);
-          },
-          () => {}
-        );
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
         setStatus("scanning");
+
+        const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e"] });
+
+        const scan = async () => {
+          if (!videoRef.current || videoRef.current.readyState < 2) {
+            rafRef.current = requestAnimationFrame(scan);
+            return;
+          }
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes.length > 0) {
+              const code = codes[0].rawValue;
+              stopCamera();
+              setScanned(code);
+              setStatus("found");
+              setLoading(true);
+              await lookupBarcode(code);
+              setLoading(false);
+              return;
+            }
+          } catch {}
+          rafRef.current = requestAnimationFrame(scan);
+        };
+        rafRef.current = requestAnimationFrame(scan);
+
       } catch {
         setStatus("error");
       }
     })();
-    return () => { try { instanceRef.current?.clear(); } catch {} };
+    return () => stopCamera();
   }, []);
 
   const lookupBarcode = async (code) => {
@@ -318,7 +346,7 @@ export function ScanModal({ catId, onItemFound, onClose }) {
           max_tokens: 1000,
           tools: [{ type: "web_search_20250305", name: "web_search" }],
           system: `日本の商品JANコードを検索して、以下のJSON形式のみを返してください。説明文不要。
-{"name":"商品名","brand":"ブランド名","unit":"適切な単位（本/個/枚など）","description":"40文字以内の説明","imageUrl":"画像URL or null"}`,
+{"name":"商品のフルネーム","brand":"ブランド名","unit":"本/個/袋など","description":"40文字以内","imageUrl":"画像URL or null"}`,
           messages: [{ role: "user", content: `JANコード: ${code}` }],
         }),
       });
@@ -326,33 +354,63 @@ export function ScanModal({ catId, onItemFound, onClose }) {
       const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
       const s = text.indexOf("{"), e = text.lastIndexOf("}");
       if (s !== -1 && e !== -1) {
-        try { setResult({ ...JSON.parse(text.slice(s, e + 1)), barcode: code }); return; }
-        catch {}
+        try { setResult(JSON.parse(text.slice(s, e + 1))); return; } catch {}
       }
     } catch {}
-    setResult({ name: `商品 (${code})`, brand: "", unit: "個", description: "", imageUrl: null, barcode: code });
+    setResult({ name: `JANコード: ${code}`, brand: "", unit: "個", description: "", imageUrl: null });
+  };
+
+  const retry = async () => {
+    setResult(null); setScanned(null); setStatus("init"); setLoading(false);
+    // カメラ再起動
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setStatus("scanning");
+      const detector = new BarcodeDetector({ formats: ["ean_13","ean_8","code_128","code_39","upc_a","upc_e"] });
+      const scan = async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) { rafRef.current = requestAnimationFrame(scan); return; }
+        try {
+          const codes = await detector.detect(videoRef.current);
+          if (codes.length > 0) {
+            const code = codes[0].rawValue;
+            stopCamera(); setScanned(code); setStatus("found"); setLoading(true);
+            await lookupBarcode(code); setLoading(false); return;
+          }
+        } catch {}
+        rafRef.current = requestAnimationFrame(scan);
+      };
+      rafRef.current = requestAnimationFrame(scan);
+    } catch { setStatus("error"); }
   };
 
   return <>
     <div className="modal-title">📷 バーコードをスキャン</div>
     <div className="modal-sub">商品のバーコードにカメラを向けてください</div>
 
-    {status === "scanning" && (
-      <div className="scanner-hint">
-        バーコード（JAN）を枠内に合わせてください<br />
-        <span style={{ fontSize: 10 }}>※ カメラの許可が必要です</span>
+    {/* カメラビュー */}
+    {(status === "scanning" || status === "init") && (
+      <div className="video-scanner-wrap">
+        <video ref={videoRef} className="video-scanner" playsInline muted autoPlay />
+        <div className="scan-guide-line" />
+        <div className="scan-guide-text">バーコードを枠内に合わせてください</div>
       </div>
     )}
 
-    <div ref={scannerRef} id="qr-reader" className="scanner-wrap" />
+    {loading && <div className="searching" style={{ marginTop: 16 }}>🔍 商品情報を取得中...</div>}
 
-    {loading && <div className="searching">🔍 商品情報を取得中...</div>}
-
+    {/* スキャン結果 */}
     {result && !loading && (
       <>
-        <div className="scan-result-card">
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <ProductImage url={result.imageUrl} size={56} />
+        <div className="scan-result-card" style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <ProductImage url={result.imageUrl} size={60} />
             <div>
               <div className="scan-result-name">{result.name}</div>
               {result.brand && <div className="scan-result-sub">{result.brand}</div>}
@@ -360,36 +418,30 @@ export function ScanModal({ catId, onItemFound, onClose }) {
             </div>
           </div>
         </div>
-        <button className="btn-primary" onClick={() => onItemFound(catId, result)}>
+        <button className="btn-primary" style={{ marginTop: 8 }} onClick={() => { stopCamera(); onItemFound(catId, result); }}>
           このアイテムを追加する
         </button>
-        <button className="btn-ghost" style={{ marginTop: 8 }} onClick={() => {
-          setResult(null); setStatus("scanning");
-          setLoading(false);
-          // 再スキャン
-          (async () => {
-            const { Html5QrcodeScanner } = await import("html5-qrcode");
-            const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 120 }, supportedScanTypes: [0] }, false);
-            instanceRef.current = scanner;
-            scanner.render(async (code) => {
-              scanner.clear(); setStatus("found"); setLoading(true);
-              await lookupBarcode(code); setLoading(false);
-            }, () => {});
-          })();
-        }}>
+        <button className="btn-ghost" style={{ marginTop: 8 }} onClick={retry}>
           もう一度スキャン
         </button>
       </>
     )}
 
-    {status === "error" && (
+    {status === "unsupported" && (
       <div className="stats-empty">
-        カメラを起動できませんでした<br />
-        <span style={{ fontSize: 11 }}>ブラウザのカメラ許可を確認してください</span>
+        このブラウザはバーコードスキャンに対応していません<br />
+        <span style={{ fontSize: 11 }}>iOS17以降のSafariをお使いください</span>
       </div>
     )}
 
-    <button className="btn-cancel" onClick={onClose}>閉じる</button>
+    {status === "error" && (
+      <div className="stats-empty">
+        カメラを起動できませんでした<br />
+        <span style={{ fontSize: 11 }}>設定 → Safari → カメラ の許可を確認してください</span>
+      </div>
+    )}
+
+    <button className="btn-cancel" style={{ marginTop: 12 }} onClick={() => { stopCamera(); onClose(); }}>閉じる</button>
   </>;
 }
 
@@ -531,15 +583,87 @@ export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory, o
 
 // ─── 購入記録モーダル ────────────────────────────────────────────────
 export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const [query,   setQuery]   = useState(prefill?.name || item.name);
-  const [result,  setResult]  = useState(prefill || null);
-  const [loading, setLoading] = useState(false);
-  const [memo,    setMemo]    = useState(prefill?.memo || "");
-  const [isFav,   setIsFav]   = useState(prefill?.isFavorite || false);
-  const [buyDate, setBuyDate] = useState(today);
-  const [qty,     setQty]     = useState(1);
+  const today = new Date().toISOString().slice(0, 10);
+  const [query,    setQuery]    = useState(prefill?.name || item.name);
+  const [result,   setResult]   = useState(prefill || null);
+  const [loading,  setLoading]  = useState(false);
+  const [memo,     setMemo]     = useState(prefill?.memo || "");
+  const [isFav,    setIsFav]    = useState(prefill?.isFavorite || false);
+  const [buyDate,  setBuyDate]  = useState(today);
+  const [qty,      setQty]      = useState(1);
+  const [scanning, setScanning] = useState(false);
+  const scannerRef  = useRef(null);
+  const instanceRef = useRef(null);
 
+  // BarcodeDetector でインラインスキャン
+  const inlineVideoRef  = useRef(null);
+  const inlineStreamRef = useRef(null);
+  const inlineRafRef    = useRef(null);
+
+  const stopScan = () => {
+    cancelAnimationFrame(inlineRafRef.current);
+    inlineStreamRef.current?.getTracks().forEach(t => t.stop());
+    inlineStreamRef.current = null;
+    setScanning(false);
+  };
+
+  const startScan = async () => {
+    if (!("BarcodeDetector" in window)) {
+      alert("このブラウザはバーコードスキャンに対応していません\niOS17以降のSafariをお使いください");
+      return;
+    }
+    setScanning(true);
+    setTimeout(async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+        inlineStreamRef.current = stream;
+        if (inlineVideoRef.current) {
+          inlineVideoRef.current.srcObject = stream;
+          await inlineVideoRef.current.play();
+        }
+        const detector = new BarcodeDetector({ formats: ["ean_13","ean_8","code_128","code_39","upc_a","upc_e"] });
+        const scan = async () => {
+          if (!inlineVideoRef.current || inlineVideoRef.current.readyState < 2) {
+            inlineRafRef.current = requestAnimationFrame(scan); return;
+          }
+          try {
+            const codes = await detector.detect(inlineVideoRef.current);
+            if (codes.length > 0) {
+              const code = codes[0].rawValue;
+              stopScan();
+              setLoading(true);
+              try {
+                const res = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    model: "claude-sonnet-4-20250514",
+                    max_tokens: 1000,
+                    tools: [{ type: "web_search_20250305", name: "web_search" }],
+                    system: `日本の商品JANコードを検索して、以下のJSON形式のみを返してください。説明文不要。\n{"name":"商品のフルネーム","brand":"ブランド・メーカー名","description":"40文字以内","imageUrl":"画像URL or null"}`,
+                    messages: [{ role: "user", content: `JANコード: ${code}` }],
+                  }),
+                });
+                const data = await res.json();
+                const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
+                const s = text.indexOf("{"), e = text.lastIndexOf("}");
+                if (s !== -1 && e !== -1) {
+                  const r = JSON.parse(text.slice(s, e + 1));
+                  setResult(r); setQuery(r.name);
+                }
+              } catch {}
+              setLoading(false);
+              return;
+            }
+          } catch {}
+          inlineRafRef.current = requestAnimationFrame(scan);
+        };
+        inlineRafRef.current = requestAnimationFrame(scan);
+      } catch { stopScan(); }
+    }, 100);
+  };
   const search = async () => {
     if (!query.trim()) return;
     setLoading(true); setResult(null);
@@ -551,7 +675,8 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
           tools: [{ type: "web_search_20250305", name: "web_search" }],
-          system: `あなたは日本の市販品の情報検索AIです。商品をウェブ検索して、以下のJSON形式のみを返してください。マークダウン・コードブロック・説明文は一切不要です。\n{"name":"商品のフルネーム","brand":"ブランド・メーカー名","description":"日本語での商品説明（40文字以内）","imageUrl":"商品の公式またはECサイト画像の直接URL、見つからなければnull"}`,
+          system: `あなたは日本の市販品の情報検索AIです。商品をウェブ検索して、以下のJSON形式のみを返してください。マークダウン・コードブロック・説明文は一切不要です。
+{"name":"商品のフルネーム","brand":"ブランド・メーカー名","description":"日本語での商品説明（40文字以内）","imageUrl":"商品の公式またはECサイト画像の直接URL、見つからなければnull"}`,
           messages: [{ role: "user", content: `日本の商品を検索してください: ${query}` }],
         }),
       });
@@ -570,23 +695,41 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
     setLoading(false);
   };
 
+  const handleRecord = (base) => {
+    onAdd(catId, item.id, { ...base, memo, isFavorite: isFav, buyDate, qty });
+  };
+
   return <>
     <div className="modal-title">購入商品を記録</div>
     <div className="modal-sub">{item.name} の購入履歴に追加します</div>
 
+    {/* 検索行 + スキャンボタン */}
     <div className="search-row">
       <input className="search-input" value={query} onChange={e => setQuery(e.target.value)}
         placeholder="商品名・ブランド名" onKeyDown={e => e.key === "Enter" && search()} />
-      <button className="search-btn" onClick={search} disabled={loading}>
-        {loading ? "…" : "🔍 検索"}
+      <button className="search-btn" onClick={search} disabled={loading || scanning}>
+        {loading ? "…" : "🔍"}
+      </button>
+      <button className="scan-inline-btn" onClick={scanning ? stopScan : startScan}>
+        {scanning ? "✕" : "📷"}
       </button>
     </div>
 
+    {/* インラインスキャナー */}
+    {scanning && (
+      <div className="video-scanner-wrap" style={{ marginBottom: 12, height: 160 }}>
+        <video ref={inlineVideoRef} className="video-scanner" playsInline muted autoPlay />
+        <div className="scan-guide-line" />
+        <div className="scan-guide-text">バーコードを枠内に合わせてください</div>
+      </div>
+    )}
+
     {loading && <div className="searching">🔍 商品情報を取得中...</div>}
 
+    {/* 商品結果 */}
     {result && !loading && (
       <div className="product-card">
-        <ProductImage url={result.imageUrl} size={64} />
+        <ProductImage url={result.imageUrl} size={56} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="prod-name">{result.name}</div>
           {result.brand       && <div className="prod-brand">{result.brand}</div>}
@@ -595,58 +738,44 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
       </div>
     )}
 
+    {/* 購入日・本数（常に表示） */}
+    <div className="purchase-meta-row">
+      <div className="purchase-meta-field">
+        <div className="flabel">購入日</div>
+        <input className="finput" type="date" value={buyDate}
+          onChange={e => setBuyDate(e.target.value)} style={{ marginBottom: 0 }} />
+      </div>
+      <div className="purchase-meta-field">
+        <div className="flabel">本数</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input className="finput" type="number" min="1" max="99" value={qty}
+            onChange={e => setQty(Math.max(1, +e.target.value))}
+            style={{ marginBottom: 0, width: "100%" }} />
+          <span style={{ fontSize: 13, color: "#A89E94", whiteSpace: "nowrap" }}>{item.unit}</span>
+        </div>
+      </div>
+    </div>
+
     {result && !loading && (
       <>
-        <div className="flabel" style={{ marginTop: 4 }}>メモ（任意）</div>
+        <div className="flabel" style={{ marginTop: 12 }}>メモ（任意）</div>
         <textarea className="ftextarea" placeholder="例: 香り少し強め・詰め替え用"
           value={memo} onChange={e => setMemo(e.target.value)} />
         <button className={`btn-fav ${isFav ? "active" : ""}`} onClick={() => setIsFav(v => !v)}>
           {isFav ? "⭐ お気に入りに設定済み" : "☆ お気に入りに設定する"}
         </button>
-        <div className="frow" style={{ marginBottom: 12 }}>
-          <div>
-            <div className="flabel">購入日</div>
-            <input className="finput" type="date" value={buyDate}
-              onChange={e => setBuyDate(e.target.value)} />
-          </div>
-          <div>
-            <div className="flabel">購入本数</div>
-            <input className="finput" type="number" min="1" max="99" value={qty}
-              onChange={e => setQty(Math.max(1, +e.target.value))} />
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
-            <span style={{ fontSize: 13, color: "#A89E94" }}>{item.unit}</span>
-          </div>
-        </div>
-        <button className="btn-primary" style={{ marginTop: 4 }}
-          onClick={() => onAdd(catId, item.id, { ...result, memo, isFavorite: isFav, buyDate, qty })}>
+        <button className="btn-primary" style={{ marginTop: 12 }}
+          onClick={() => handleRecord(result)}>
           この商品を記録する
         </button>
       </>
     )}
 
-    {!result && !loading && (
-      <>
-        <div className="frow" style={{ marginBottom: 12 }}>
-          <div>
-            <div className="flabel">購入日</div>
-            <input className="finput" type="date" value={buyDate}
-              onChange={e => setBuyDate(e.target.value)} />
-          </div>
-          <div>
-            <div className="flabel">購入本数</div>
-            <input className="finput" type="number" min="1" max="99" value={qty}
-              onChange={e => setQty(Math.max(1, +e.target.value))} />
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
-            <span style={{ fontSize: 13, color: "#A89E94" }}>{item.unit}</span>
-          </div>
-        </div>
-        <button className="btn-ghost"
-          onClick={() => onAdd(catId, item.id, { name: query, brand: "", description: "", imageUrl: null, memo, isFavorite: isFav, buyDate, qty })}>
-          検索せず「{query}」として記録
-        </button>
-      </>
+    {!result && !loading && !scanning && (
+      <button className="btn-ghost" style={{ marginTop: 8 }}
+        onClick={() => handleRecord({ name: query, brand: "", description: "", imageUrl: null })}>
+        検索せず「{query}」として記録
+      </button>
     )}
 
     <button className="btn-cancel" onClick={() => setModal({ type: "history", catId, item })}>
