@@ -272,7 +272,7 @@ export function EditItemModal({ catId, item, onSave, onClose }) {
 }
 
 // ─── バーコードスキャンモーダル（ZXing ベース・全ブラウザ対応）────
-export function ScanModal({ catId, onItemFound, onClose }) {
+export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClose }) {
   const videoRef    = useRef(null);
   const streamRef   = useRef(null);
   const readerRef   = useRef(null);
@@ -423,8 +423,12 @@ export function ScanModal({ catId, onItemFound, onClose }) {
           </div>
         </div>
         <button className="btn-primary" style={{ marginTop: 8 }}
-          onClick={() => { stopCamera(); onItemFound(catId, result); }}>
-          このアイテムを追加する
+          onClick={() => {
+            stopCamera();
+            if (onScanResult) { onScanResult(result); }         // 購入記録から呼ばれた場合
+            else if (onItemFound) { onItemFound(catId, result); } // アイテム追加から呼ばれた場合
+          }}>
+          {onScanResult ? "この商品で記録する" : "このアイテムを追加する"}
         </button>
         <button className="btn-ghost" style={{ marginTop: 8 }} onClick={retry}>
           もう一度スキャン
@@ -440,7 +444,11 @@ export function ScanModal({ catId, onItemFound, onClose }) {
     )}
 
     <button className="btn-cancel" style={{ marginTop: 12 }}
-      onClick={() => { stopCamera(); onClose(); }}>
+      onClick={() => {
+        stopCamera();
+        if (onScanClose) { onScanClose(); }
+        else if (onClose) { onClose(); }
+      }}>
       閉じる
     </button>
   </>;
@@ -585,137 +593,14 @@ export function HistoryModal({ catId, item, setModal, onClose, onReuseHistory, o
 // ─── 購入記録モーダル ────────────────────────────────────────────────
 export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [query,    setQuery]    = useState(prefill?.name || item.name);
-  const [result,   setResult]   = useState(prefill || null);
-  const [loading,  setLoading]  = useState(false);
-  const [memo,     setMemo]     = useState(prefill?.memo || "");
-  const [isFav,    setIsFav]    = useState(prefill?.isFavorite || false);
-  const [buyDate,  setBuyDate]  = useState(today);
-  const [qty,      setQty]      = useState(1);
-  const [scanning, setScanning] = useState(false);
-  const scannerRef  = useRef(null);
-  const instanceRef = useRef(null);
+  const [query,   setQuery]   = useState(prefill?.name || item.name);
+  const [result,  setResult]  = useState(prefill || null);
+  const [loading, setLoading] = useState(false);
+  const [memo,    setMemo]    = useState(prefill?.memo || "");
+  const [isFav,   setIsFav]   = useState(prefill?.isFavorite || false);
+  const [buyDate, setBuyDate] = useState(today);
+  const [qty,     setQty]     = useState(1);
 
-  // ZXing でインラインスキャン（全ブラウザ対応）
-  const inlineVideoRef  = useRef(null);
-  const inlineStreamRef = useRef(null);
-  const inlineActiveRef = useRef(false);
-
-  const stopScan = () => {
-    inlineActiveRef.current = false;
-    inlineStreamRef.current?.getTracks().forEach(t => t.stop());
-    inlineStreamRef.current = null;
-    setScanning(false);
-  };
-
-  const runScanLoop = (stream) => {
-    // video要素にストリームをセットしてスキャン開始
-    const tryAttach = async (retries = 20) => {
-      const v = inlineVideoRef.current;
-      if (!v) {
-        if (retries > 0) { setTimeout(() => tryAttach(retries - 1), 100); return; }
-        stopScan(); return;
-      }
-      try {
-        v.srcObject = stream;
-        v.setAttribute("playsinline", "");
-        v.muted = true;
-        await v.play();
-      } catch { stopScan(); return; }
-
-      const hints = new Map();
-      hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-        window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8,
-        window.ZXing.BarcodeFormat.CODE_128, window.ZXing.BarcodeFormat.UPC_A,
-      ]);
-      const reader = new window.ZXing.MultiFormatReader();
-      reader.setHints(hints);
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      const scan = () => {
-        if (!inlineActiveRef.current) return;
-        const vid = inlineVideoRef.current;
-        if (!vid || vid.readyState < 2 || vid.videoWidth === 0) {
-          requestAnimationFrame(scan); return;
-        }
-        canvas.width = vid.videoWidth; canvas.height = vid.videoHeight;
-        ctx.drawImage(vid, 0, 0);
-        try {
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const lum = new window.ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
-          const bmp = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
-          const decoded = reader.decode(bmp);
-          if (decoded && inlineActiveRef.current) {
-            const code = decoded.getText();
-            stopScan();
-            setLoading(true);
-            (async () => {
-              try {
-                const r = await fetch("https://api.anthropic.com/v1/messages", {
-                  method: "POST", headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514", max_tokens: 1000,
-                    tools: [{ type: "web_search_20250305", name: "web_search" }],
-                    system: `日本の商品JANコードを検索して以下のJSON形式のみ返してください。
-{"name":"商品のフルネーム","brand":"ブランド・メーカー名","description":"40文字以内","imageUrl":"画像URL or null"}`,
-                    messages: [{ role: "user", content: `JANコード: ${code}` }],
-                  }),
-                });
-                const d = await r.json();
-                const txt = (d.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
-                const s = txt.indexOf("{"), e = txt.lastIndexOf("}");
-                if (s !== -1 && e !== -1) {
-                  const parsed = JSON.parse(txt.slice(s, e + 1));
-                  setResult(parsed); setQuery(parsed.name);
-                }
-              } catch {}
-              setLoading(false);
-            })();
-            return;
-          }
-        } catch {}
-        requestAnimationFrame(scan);
-      };
-      requestAnimationFrame(scan);
-    };
-    tryAttach();
-  };
-
-  const startScan = async () => {
-    // 前回のストリームを確実に停止
-    inlineActiveRef.current = false;
-    inlineStreamRef.current?.getTracks().forEach(t => t.stop());
-    inlineStreamRef.current = null;
-
-    setScanning(true);
-    inlineActiveRef.current = true;
-
-    try {
-      // ZXing ロード（キャッシュ済みなら即完了）
-      if (!window.ZXing) {
-        await new Promise((resolve, reject) => {
-          // すでに script タグがあれば待つだけ
-          const existing = document.querySelector('script[data-zxing]');
-          if (existing) { existing.addEventListener("load", resolve); return; }
-          const s = document.createElement("script");
-          s.src = "https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/umd/index.min.js";
-          s.setAttribute("data-zxing", "1");
-          s.onload = resolve; s.onerror = reject;
-          document.head.appendChild(s);
-        });
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-      inlineStreamRef.current = stream;
-      // DOM反映を待ってからアタッチ
-      runScanLoop(stream);
-    } catch (e) {
-      inlineActiveRef.current = false;
-      setScanning(false);
-    }
-  };
   const search = async () => {
     if (!query.trim()) return;
     setLoading(true); setResult(null);
@@ -751,31 +636,40 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
     onAdd(catId, item.id, { ...base, memo, isFavorite: isFav, buyDate, qty });
   };
 
+  // 📷ボタン → スキャンモーダルに切り替え（結果を持って戻る）
+  const openScanner = () => {
+    setModal({
+      type: "scan",
+      catId,
+      // スキャン完了後に呼ばれるコールバック
+      onScanResult: (scanResult) => {
+        setModal({ type: "addPurchase", catId, item, prefill: {
+          name: scanResult.name || query,
+          brand: scanResult.brand || "",
+          description: scanResult.description || "",
+          imageUrl: scanResult.imageUrl || null,
+          memo: "", isFavorite: false,
+        }});
+      },
+      onScanClose: () => setModal({ type: "addPurchase", catId, item, prefill: null }),
+    });
+  };
+
   return <>
     <div className="modal-title">購入商品を記録</div>
     <div className="modal-sub">{item.name} の購入履歴に追加します</div>
 
-    {/* 検索行 + スキャンボタン */}
+    {/* 検索行 */}
     <div className="search-row">
       <input className="search-input" value={query} onChange={e => setQuery(e.target.value)}
         placeholder="商品名・ブランド名" onKeyDown={e => e.key === "Enter" && search()} />
-      <button className="search-btn" onClick={search} disabled={loading || scanning}>
+      <button className="search-btn" onClick={search} disabled={loading}>
         {loading ? "…" : "🔍"}
       </button>
-      <button className="scan-inline-btn" onClick={scanning ? stopScan : startScan}>
-        {scanning ? "✕" : "📷"}
+      <button className="scan-inline-btn" onClick={openScanner} title="バーコードスキャン">
+        📷
       </button>
     </div>
-
-    {/* インラインスキャナー */}
-    {scanning && (
-      <div className="video-scanner-wrap" style={{ marginBottom: 12, height: 180 }}>
-        <video ref={inlineVideoRef} className="video-scanner" playsInline muted />
-        <div className="scan-guide-line" />
-        <div className="scan-guide-text">バーコードを赤いラインに合わせてください</div>
-        <button onClick={stopScan} style={{ position:"absolute", top:8, right:8, background:"rgba(0,0,0,0.5)", border:"none", color:"white", borderRadius:8, padding:"4px 10px", fontSize:13, cursor:"pointer" }}>✕ 閉じる</button>
-      </div>
-    )}
 
     {loading && <div className="searching">🔍 商品情報を取得中...</div>}
 
@@ -791,7 +685,7 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
       </div>
     )}
 
-    {/* 購入日・本数（常に表示） */}
+    {/* 購入日・本数 */}
     <div style={{ display: "flex", gap: 10, marginTop: 12, marginBottom: 4 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="flabel">購入日</div>
@@ -799,7 +693,7 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
           onChange={e => setBuyDate(e.target.value)}
           style={{ marginBottom: 0, width: "100%" }} />
       </div>
-      <div style={{ width: 90, flexShrink: 0 }}>
+      <div style={{ width: 80, flexShrink: 0 }}>
         <div className="flabel">本数</div>
         <input className="finput" type="number" min="1" max="99" value={qty}
           onChange={e => setQty(Math.max(1, +e.target.value))}
@@ -825,7 +719,7 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
       </>
     )}
 
-    {!result && !loading && !scanning && (
+    {!result && !loading && (
       <button className="btn-ghost" style={{ marginTop: 8 }}
         onClick={() => handleRecord({ name: query, brand: "", description: "", imageUrl: null })}>
         検索せず「{query}」として記録
@@ -970,7 +864,7 @@ export function ModalLayer({
         {modal.type === "history"     && <HistoryModal catId={modal.catId} item={modal.item} setModal={setModal} onClose={() => setModal(null)} onReuseHistory={reuseHistory} onDeleteHistory={deleteHistory} />}
         {modal.type === "addPurchase" && <AddPurchaseModal catId={modal.catId} item={modal.item} onAdd={addPurchase} setModal={setModal} prefill={modal.prefill} />}
         {modal.type === "shopping"    && <ShoppingModal shopItems={shopItems} onClose={() => setModal(null)} toast_={toast_} />}
-        {modal.type === "scan"        && <ScanModal catId={modal.catId} onItemFound={onScanFound} onClose={() => setModal(null)} />}
+        {modal.type === "scan"        && <ScanModal catId={modal.catId} onItemFound={onScanFound} onClose={() => setModal(null)} onScanResult={modal.onScanResult} onScanClose={modal.onScanClose} />}
         {modal.type === "stats"       && <StatsModal cats={cats} items={items} onClose={() => setModal(null)} />}
         {modal.type === "settings"    && <SettingsModal cats={cats} setModal={setModal} onClose={() => setModal(null)} resetAllData={resetAllData} />}
         {modal.type === "catManager"  && <CatManagerModal cats={cats} setModal={setModal} onClose={() => setModal(null)} />}
