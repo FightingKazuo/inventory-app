@@ -761,20 +761,21 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
     )}
 
     {/* 購入日・本数（常に表示） */}
-    <div className="purchase-meta-row">
-      <div className="purchase-meta-field">
+    <div style={{ display: "flex", gap: 10, marginTop: 12, marginBottom: 4 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div className="flabel">購入日</div>
         <input className="finput" type="date" value={buyDate}
-          onChange={e => setBuyDate(e.target.value)} style={{ marginBottom: 0 }} />
+          onChange={e => setBuyDate(e.target.value)}
+          style={{ marginBottom: 0, width: "100%" }} />
       </div>
-      <div className="purchase-meta-field">
+      <div style={{ width: 90, flexShrink: 0 }}>
         <div className="flabel">本数</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <input className="finput" type="number" min="1" max="99" value={qty}
-            onChange={e => setQty(Math.max(1, +e.target.value))}
-            style={{ marginBottom: 0, width: "100%" }} />
-          <span style={{ fontSize: 13, color: "#A89E94", whiteSpace: "nowrap" }}>{item.unit}</span>
-        </div>
+        <input className="finput" type="number" min="1" max="99" value={qty}
+          onChange={e => setQty(Math.max(1, +e.target.value))}
+          style={{ marginBottom: 0, width: "100%", textAlign: "center" }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
+        <span style={{ fontSize: 13, color: "#A89E94", whiteSpace: "nowrap" }}>{item.unit}</span>
       </div>
     </div>
 
