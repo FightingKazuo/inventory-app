@@ -608,28 +608,21 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
     setScanning(false);
   };
 
-  const startScan = async () => {
-    setScanning(true);
-    inlineActiveRef.current = true;
-    try {
-      if (!window.ZXing) {
-        await new Promise((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = "https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/umd/index.min.js";
-          s.onload = resolve; s.onerror = reject;
-          document.head.appendChild(s);
-        });
+  const runScanLoop = (stream) => {
+    // video要素にストリームをセットしてスキャン開始
+    const tryAttach = async (retries = 20) => {
+      const v = inlineVideoRef.current;
+      if (!v) {
+        if (retries > 0) { setTimeout(() => tryAttach(retries - 1), 100); return; }
+        stopScan(); return;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      inlineStreamRef.current = stream;
-      // video要素にセット（少し待ってDOMを確認）
-      await new Promise(r => setTimeout(r, 150));
-      if (inlineVideoRef.current) {
-        inlineVideoRef.current.srcObject = stream;
-        await inlineVideoRef.current.play();
-      }
+      try {
+        v.srcObject = stream;
+        v.setAttribute("playsinline", "");
+        v.muted = true;
+        await v.play();
+      } catch { stopScan(); return; }
+
       const hints = new Map();
       hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [
         window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8,
@@ -638,22 +631,24 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
       const reader = new window.ZXing.MultiFormatReader();
       reader.setHints(hints);
       const canvas = document.createElement("canvas");
-      const ctx    = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d");
 
       const scan = () => {
         if (!inlineActiveRef.current) return;
-        const v = inlineVideoRef.current;
-        if (!v || v.readyState < 2) { requestAnimationFrame(scan); return; }
-        canvas.width = v.videoWidth; canvas.height = v.videoHeight;
-        ctx.drawImage(v, 0, 0);
+        const vid = inlineVideoRef.current;
+        if (!vid || vid.readyState < 2 || vid.videoWidth === 0) {
+          requestAnimationFrame(scan); return;
+        }
+        canvas.width = vid.videoWidth; canvas.height = vid.videoHeight;
+        ctx.drawImage(vid, 0, 0);
         try {
           const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const lum = new window.ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
           const bmp = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
-          const res = reader.decode(bmp);
-          if (res && inlineActiveRef.current) {
+          const decoded = reader.decode(bmp);
+          if (decoded && inlineActiveRef.current) {
+            const code = decoded.getText();
             stopScan();
-            const code = res.getText();
             setLoading(true);
             (async () => {
               try {
@@ -683,7 +678,43 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
         requestAnimationFrame(scan);
       };
       requestAnimationFrame(scan);
-    } catch { stopScan(); }
+    };
+    tryAttach();
+  };
+
+  const startScan = async () => {
+    // 前回のストリームを確実に停止
+    inlineActiveRef.current = false;
+    inlineStreamRef.current?.getTracks().forEach(t => t.stop());
+    inlineStreamRef.current = null;
+
+    setScanning(true);
+    inlineActiveRef.current = true;
+
+    try {
+      // ZXing ロード（キャッシュ済みなら即完了）
+      if (!window.ZXing) {
+        await new Promise((resolve, reject) => {
+          // すでに script タグがあれば待つだけ
+          const existing = document.querySelector('script[data-zxing]');
+          if (existing) { existing.addEventListener("load", resolve); return; }
+          const s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/umd/index.min.js";
+          s.setAttribute("data-zxing", "1");
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      inlineStreamRef.current = stream;
+      // DOM反映を待ってからアタッチ
+      runScanLoop(stream);
+    } catch (e) {
+      inlineActiveRef.current = false;
+      setScanning(false);
+    }
   };
   const search = async () => {
     if (!query.trim()) return;
