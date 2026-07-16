@@ -175,9 +175,18 @@ export default function App() {
   const resetAllData = async () => {
     saveCats(DEFAULT_CATEGORIES);
     saveItems(DEFAULT_ITEMS);
-    setActiveTab("kitchen");
+    setActiveTab("shop");
     setModal(null);
     toast_("データをリセットしました");
+  };
+
+  // ── データインポート ──────────────────────────────────────────────
+  const onImport = (importedCats, importedItems) => {
+    saveCats(importedCats);
+    saveItems(importedItems);
+    setActiveTab(importedCats[0]?.id || "shop");
+    setModal(null);
+    toast_("データをインポートしました");
   };
 
   // ── ローディング ──────────────────────────────────────────────────
@@ -381,7 +390,8 @@ export default function App() {
           addPurchase={addPurchase} reuseHistory={reuseHistory} deleteHistory={deleteHistory}
           onScanFound={onScanFound}
           toast_={toast_}
-          resetAllData={resetAllData} />
+          resetAllData={resetAllData}
+          onImport={onImport} />
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
