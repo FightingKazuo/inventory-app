@@ -271,100 +271,33 @@ export function EditItemModal({ catId, item, onSave, onClose }) {
   </>;
 }
 
-// ─── バーコードスキャンモーダル（ZXing ベース・全ブラウザ対応）────
+// ─── バーコードスキャンモーダル（カメラ撮影 → Claude Vision）────────
 export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClose }) {
-  const videoRef    = useRef(null);
-  const streamRef   = useRef(null);
-  const readerRef   = useRef(null);
-  const [status,  setStatus]  = useState("init"); // init | scanning | found | error
-  const [loading, setLoading] = useState(false);
+  const [status,  setStatus]  = useState("idle"); // idle | loading | found | error
   const [result,  setResult]  = useState(null);
+  const [preview, setPreview] = useState(null);
+  const fileInputRef = useRef(null);
 
-  const stopCamera = () => {
-    if (readerRef.current) {
-      try { readerRef.current.reset(); } catch {}
-      readerRef.current = null;
-    }
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-  };
+  const handleCapture = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        // ZXing をCDNから動的ロード
-        if (!window.ZXing) {
-          await new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            s.src = "https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.21.3/umd/index.min.js";
-            s.onload = resolve; s.onerror = reject;
-            document.head.appendChild(s);
-          });
-        }
-        if (!active) return;
+    // プレビュー表示
+    const reader = new FileReader();
+    reader.onload = (ev) => setPreview(ev.target.result);
+    reader.readAsDataURL(file);
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
+    setStatus("loading");
+    setResult(null);
 
-        const hints = new Map();
-        const formats = [
-          window.ZXing.BarcodeFormat.EAN_13,
-          window.ZXing.BarcodeFormat.EAN_8,
-          window.ZXing.BarcodeFormat.CODE_128,
-          window.ZXing.BarcodeFormat.UPC_A,
-          window.ZXing.BarcodeFormat.UPC_E,
-        ];
-        hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-        const reader = new window.ZXing.MultiFormatReader();
-        reader.setHints(hints);
-        readerRef.current = reader;
-
-        setStatus("scanning");
-
-        const canvas = document.createElement("canvas");
-        const ctx    = canvas.getContext("2d");
-
-        const scan = () => {
-          if (!active || !videoRef.current) return;
-          const v = videoRef.current;
-          if (v.readyState < 2) { requestAnimationFrame(scan); return; }
-          canvas.width  = v.videoWidth;
-          canvas.height = v.videoHeight;
-          ctx.drawImage(v, 0, 0);
-          try {
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const lum = new window.ZXing.RGBLuminanceSource(imgData.data, canvas.width, canvas.height);
-            const bmp = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
-            const res = reader.decode(bmp);
-            if (res && active) {
-              active = false;
-              stopCamera();
-              setStatus("found");
-              setLoading(true);
-              lookupBarcode(res.getText());
-            }
-          } catch {
-            requestAnimationFrame(scan);
-          }
-        };
-        requestAnimationFrame(scan);
-
-      } catch(e) {
-        if (active) setStatus("error");
-      }
-    })();
-    return () => { active = false; stopCamera(); };
-  }, []);
-
-  const lookupBarcode = async (code) => {
     try {
+      // base64に変換
+      const base64 = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = (ev) => resolve(ev.target.result.split(",")[1]);
+        r.readAsDataURL(file);
+      });
+
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -372,55 +305,84 @@ export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClo
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
           tools: [{ type: "web_search_20250305", name: "web_search" }],
-          system: `日本の商品JANコードを検索して、以下のJSON形式のみを返してください。説明文不要。
-{"name":"商品のフルネーム","brand":"ブランド名","unit":"本/個/袋など","description":"40文字以内","imageUrl":"画像URL or null"}`,
-          messages: [{ role: "user", content: `JANコード: ${code}` }],
+          system: `この画像のバーコード（JAN/EAN）を読み取り、日本の商品として検索してください。以下のJSON形式のみを返してください。説明文・コードブロック不要。
+{"name":"商品のフルネーム","brand":"ブランド・メーカー名","description":"日本語での商品説明（40文字以内）","imageUrl":"商品画像のURL or null"}`,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } },
+              { type: "text", text: "この画像のバーコードを読み取って商品を特定してください。" }
+            ]
+          }]
         }),
       });
+
       const data = await res.json();
       const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("").trim();
       const s = text.indexOf("{"), e = text.lastIndexOf("}");
       if (s !== -1 && e !== -1) {
-        try { setResult(JSON.parse(text.slice(s, e + 1))); setLoading(false); return; } catch {}
+        try {
+          const parsed = JSON.parse(text.slice(s, e + 1));
+          setResult(parsed);
+          setStatus("found");
+          return;
+        } catch {}
       }
-    } catch {}
-    setResult({ name: `不明な商品`, brand: "", unit: "個", description: "", imageUrl: null });
-    setLoading(false);
+      setStatus("error");
+    } catch {
+      setStatus("error");
+    }
   };
 
-  const retry = () => {
-    setResult(null); setStatus("init"); setLoading(false);
-    // useEffect を再実行するためにコンポーネントをリマウント — 親で key を変えるか、ページリロード
-    window.location.reload();
+  const handleClose = () => {
+    if (onScanClose) onScanClose();
+    else if (onClose) onClose();
   };
 
   return <>
     <div className="modal-title">📷 バーコードをスキャン</div>
-    <div className="modal-sub">商品のバーコードにカメラを向けてください</div>
+    <div className="modal-sub">商品のバーコードを撮影してください</div>
 
-    {(status === "init" || status === "scanning") && (
+    {/* 撮影ボタン */}
+    {status === "idle" && (
       <>
-        <p style={{ fontSize: 12, color: "#A89E94", textAlign: "center", marginBottom: 8 }}>
-          {status === "init" ? "カメラを起動中..." : "バーコードを赤いラインに合わせてください"}
-        </p>
-        <div style={{ position: "relative", width: "100%", height: 220, borderRadius: 14, overflow: "hidden", background: "#111", marginBottom: 12 }}>
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            autoPlay
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
-          <div style={{ position: "absolute", top: "50%", left: "8%", right: "8%", height: 2, background: "#E8734A", transform: "translateY(-50%)", boxShadow: "0 0 8px #E8734A" }} />
+        <div style={{ background: "#F7F4EF", borderRadius: 14, padding: "32px 20px", textAlign: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+          <div style={{ fontSize: 14, color: "#A89E94", lineHeight: 1.7 }}>
+            バーコードが見える状態で<br />カメラで撮影してください
+          </div>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleCapture}
+          style={{ display: "none" }}
+        />
+        <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
+          📷 カメラで撮影する
+        </button>
       </>
     )}
 
-    {loading && <div className="searching" style={{ marginTop: 16 }}>🔍 商品情報を取得中...</div>}
-
-    {result && !loading && (
+    {/* 読み取り中 */}
+    {status === "loading" && (
       <>
-        <div className="scan-result-card" style={{ marginTop: 12 }}>
+        {preview && (
+          <img src={preview} alt="撮影画像" style={{ width: "100%", borderRadius: 12, marginBottom: 12, objectFit: "cover", maxHeight: 200 }} />
+        )}
+        <div className="searching">🔍 バーコードを読み取り中...</div>
+      </>
+    )}
+
+    {/* 結果 */}
+    {status === "found" && result && (
+      <>
+        {preview && (
+          <img src={preview} alt="撮影画像" style={{ width: "100%", borderRadius: 12, marginBottom: 12, objectFit: "cover", maxHeight: 160 }} />
+        )}
+        <div className="scan-result-card">
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
             <ProductImage url={result.imageUrl} size={60} />
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -432,35 +394,41 @@ export function ScanModal({ catId, onItemFound, onClose, onScanResult, onScanClo
         </div>
         <button className="btn-primary" style={{ marginTop: 8 }}
           onClick={() => {
-            stopCamera();
             if (onScanResult) onScanResult(result);
             else if (onItemFound) onItemFound(catId, result);
           }}>
           {onScanResult ? "この商品で記録する" : "このアイテムを追加する"}
         </button>
-        <button className="btn-ghost" style={{ marginTop: 8 }} onClick={retry}>
-          もう一度スキャン
+        <button className="btn-ghost" style={{ marginTop: 8 }}
+          onClick={() => { setStatus("idle"); setResult(null); setPreview(null); }}>
+          撮り直す
         </button>
       </>
     )}
 
+    {/* エラー */}
     {status === "error" && (
-      <div className="stats-empty">
-        カメラを起動できませんでした<br />
-        <span style={{ fontSize: 11 }}>設定 → Safari → カメラの許可を確認してください</span>
-      </div>
+      <>
+        {preview && (
+          <img src={preview} alt="撮影画像" style={{ width: "100%", borderRadius: 12, marginBottom: 12, objectFit: "cover", maxHeight: 160 }} />
+        )}
+        <div className="stats-empty">
+          バーコードを読み取れませんでした<br />
+          <span style={{ fontSize: 11 }}>バーコードが画面全体に大きく映るように撮り直してください</span>
+        </div>
+        <button className="btn-primary" style={{ marginTop: 8 }}
+          onClick={() => { setStatus("idle"); setResult(null); setPreview(null); }}>
+          撮り直す
+        </button>
+      </>
     )}
 
-    <button className="btn-cancel" style={{ marginTop: 16 }}
-      onClick={() => {
-        stopCamera();
-        if (onScanClose) onScanClose();
-        else if (onClose) onClose();
-      }}>
+    <button className="btn-cancel" style={{ marginTop: 12 }} onClick={handleClose}>
       閉じる
     </button>
   </>;
 }
+
 
 // ─── 消費統計モーダル ────────────────────────────────────────────────
 export function StatsModal({ cats, items, onClose }) {
@@ -693,22 +661,25 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
       </div>
     )}
 
-    {/* 購入日・本数 */}
-    <div style={{ display: "flex", gap: 10, marginTop: 12, marginBottom: 4 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="flabel">購入日</div>
-        <input className="finput" type="date" value={buyDate}
-          onChange={e => setBuyDate(e.target.value)}
-          style={{ marginBottom: 0, width: "100%" }} />
-      </div>
-      <div style={{ width: 80, flexShrink: 0 }}>
-        <div className="flabel">本数</div>
-        <input className="finput" type="number" min="1" max="99" value={qty}
+    {/* 購入日 */}
+    <div style={{ marginTop: 12 }}>
+      <div className="flabel">購入日</div>
+      <input
+        type="date" value={buyDate}
+        onChange={e => setBuyDate(e.target.value)}
+        style={{ display: "block", width: "100%", boxSizing: "border-box", border: "2px solid #EEE9E2", borderRadius: 10, padding: "11px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", background: "#F7F4EF", marginBottom: 10 }}
+      />
+    </div>
+    {/* 本数 */}
+    <div style={{ marginBottom: 4 }}>
+      <div className="flabel">本数</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="number" min="1" max="99" value={qty}
           onChange={e => setQty(Math.max(1, +e.target.value))}
-          style={{ marginBottom: 0, width: "100%", textAlign: "center" }} />
-      </div>
-      <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
-        <span style={{ fontSize: 13, color: "#A89E94", whiteSpace: "nowrap" }}>{item.unit}</span>
+          style={{ width: 80, boxSizing: "border-box", border: "2px solid #EEE9E2", borderRadius: 10, padding: "11px 8px", fontSize: 18, fontFamily: "inherit", outline: "none", background: "#F7F4EF", textAlign: "center" }}
+        />
+        <span style={{ fontSize: 14, color: "#A89E94" }}>{item.unit}</span>
       </div>
     </div>
 
@@ -742,22 +713,46 @@ export function AddPurchaseModal({ catId, item, onAdd, setModal, prefill }) {
 
 
 // ─── 設定モーダル ────────────────────────────────────────────────────
-export function SettingsModal({ cats, setModal, onClose, resetAllData }) {
+export function SettingsModal({ cats, items, setModal, onClose, resetAllData, onImport }) {
   const [confirmReset, setConfirmReset] = useState(false);
+  const [importError,  setImportError]  = useState("");
+  const [importOk,     setImportOk]     = useState(false);
+  const fileRef = useRef(null);
+
+  // エクスポート
+  const handleExport = () => {
+    const data = { version: 1, exportedAt: new Date().toISOString(), cats, items };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `inventory-backup-${new Date().toLocaleDateString("ja-JP").replace(/\//g, "-")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // インポート
+  const handleImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(""); setImportOk(false);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.cats || !data.items) throw new Error("形式が違います");
+        onImport(data.cats, data.items);
+        setImportOk(true);
+      } catch (err) {
+        setImportError("読み込めませんでした。正しいバックアップファイルを選んでください。");
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const menuItems = [
-    {
-      icon: "📂",
-      label: "カテゴリー管理",
-      sub: `${cats.length}件`,
-      action: () => setModal({ type: "catManager" }),
-    },
-    {
-      icon: "📊",
-      label: "消費統計",
-      sub: "過去6ヶ月",
-      action: () => setModal({ type: "stats" }),
-    },
+    { icon: "📂", label: "カテゴリー管理", sub: `${cats.length}件`, action: () => setModal({ type: "catManager" }) },
+    { icon: "📊", label: "消費統計",       sub: "過去6ヶ月",        action: () => setModal({ type: "stats" }) },
   ];
 
   return <>
@@ -776,7 +771,29 @@ export function SettingsModal({ cats, setModal, onClose, resetAllData }) {
 
     <div className="settings-divider" style={{ margin: "16px 0" }} />
 
-    {/* データ管理 */}
+    {/* バックアップ */}
+    <div className="settings-label">💾 バックアップ</div>
+    <div className="settings-menu" style={{ marginBottom: 8 }}>
+      <button className="settings-menu-row" onClick={handleExport}>
+        <span className="settings-menu-icon">📤</span>
+        <span className="settings-menu-label">データをエクスポート</span>
+        <span className="settings-menu-sub">JSONで保存</span>
+        <span className="settings-menu-arrow">›</span>
+      </button>
+      <button className="settings-menu-row" onClick={() => fileRef.current?.click()}>
+        <span className="settings-menu-icon">📥</span>
+        <span className="settings-menu-label">データをインポート</span>
+        <span className="settings-menu-sub">JSONから復元</span>
+        <span className="settings-menu-arrow">›</span>
+      </button>
+    </div>
+    <input ref={fileRef} type="file" accept=".json" onChange={handleImport} style={{ display: "none" }} />
+    {importOk    && <div style={{ fontSize: 13, color: "#5BAD8F", marginBottom: 8 }}>✅ インポートしました</div>}
+    {importError && <div style={{ fontSize: 13, color: "#E8734A", marginBottom: 8 }}>⚠️ {importError}</div>}
+
+    <div className="settings-divider" style={{ margin: "16px 0" }} />
+
+    {/* データリセット */}
     <div className="settings-label">🗂️ データ管理</div>
     {!confirmReset
       ? <button className="btn-danger" onClick={() => setConfirmReset(true)}>
@@ -860,6 +877,7 @@ export function ModalLayer({
   onScanFound,
   toast_,
   resetAllData,
+  onImport,
 }) {
   return (
     <div className="overlay" onClick={() => setModal(null)}>
@@ -874,7 +892,7 @@ export function ModalLayer({
         {modal.type === "shopping"    && <ShoppingModal shopItems={shopItems} onClose={() => setModal(null)} toast_={toast_} />}
         {modal.type === "scan"        && <ScanModal catId={modal.catId} onItemFound={onScanFound} onClose={() => setModal(null)} onScanResult={modal.onScanResult} onScanClose={modal.onScanClose} />}
         {modal.type === "stats"       && <StatsModal cats={cats} items={items} onClose={() => setModal(null)} />}
-        {modal.type === "settings"    && <SettingsModal cats={cats} setModal={setModal} onClose={() => setModal(null)} resetAllData={resetAllData} />}
+        {modal.type === "settings"    && <SettingsModal cats={cats} items={items} setModal={setModal} onClose={() => setModal(null)} resetAllData={resetAllData} onImport={onImport} />}
         {modal.type === "catManager"  && <CatManagerModal cats={cats} setModal={setModal} onClose={() => setModal(null)} />}
       </div>
     </div>
