@@ -1,6 +1,34 @@
-export const PRESET_ICONS = [
-  "🍳","🧺","💄","🧹","🛁","💊","🐾","🖥️","🌿","🏋️","🧴","🪥","🍶","🧤","🪴","🧊","🔧","📦"
+// シンプルなSVGアイコン（Notionスタイル）
+// key: id, value: SVGパス or 絵文字
+export const ICON_SET = [
+  { id: "home",      label: "家",       svg: "🏠" },
+  { id: "kitchen",   label: "キッチン",  svg: "🍳" },
+  { id: "bath",      label: "お風呂",    svg: "🛁" },
+  { id: "laundry",   label: "洗濯",      svg: "🧺" },
+  { id: "beauty",    label: "美容",      svg: "💄" },
+  { id: "health",    label: "健康",      svg: "💊" },
+  { id: "food",      label: "食品",      svg: "🥫" },
+  { id: "clean",     label: "掃除",      svg: "🧹" },
+  { id: "baby",      label: "ベビー",    svg: "🍼" },
+  { id: "pet",       label: "ペット",    svg: "🐾" },
+  { id: "plant",     label: "植物",      svg: "🌿" },
+  { id: "tools",     label: "工具",      svg: "🔧" },
+  { id: "box",       label: "備品",      svg: "📦" },
+  { id: "office",    label: "オフィス",  svg: "🖥️" },
+  { id: "sport",     label: "スポーツ",  svg: "🏋️" },
+  { id: "drink",     label: "飲み物",    svg: "🍶" },
+  { id: "cold",      label: "冷蔵",      svg: "🧊" },
+  { id: "skin",      label: "スキンケア", svg: "🧴" },
+  { id: "tooth",     label: "歯",        svg: "🪥" },
+  { id: "glove",     label: "手袋",      svg: "🧤" },
+  { id: "plant2",    label: "観葉植物",  svg: "🪴" },
+  { id: "toilet",    label: "トイレ",    svg: "🚽" },
+  { id: "recycle",   label: "ゴミ",      svg: "♻️" },
+  { id: "car",       label: "車",        svg: "🚗" },
 ];
+
+// 後方互換（PRESET_ICONSを使っている箇所用）
+export const PRESET_ICONS = ICON_SET.map(i => i.svg);
 
 export const PRESET_COLORS = [
   "#E8734A","#4A90D9","#C06A9E","#5BAD8F","#8B7EC8",
@@ -28,20 +56,26 @@ export const DEFAULT_ITEMS = {
   ],
 };
 
-// ストレージキー（固定 — 今後変えない）
+// ストレージキー（固定）
 export const STORAGE_CATS  = "inv-cats";
 export const STORAGE_ITEMS = "inv-items";
 
-// 旧キー一覧（移行用 — 新しい順に並べる）
+// 旧キー一覧（移行用）
 export const LEGACY_KEYS = [
   { cats: "inv5-cats",  items: "inv5-items"  },
   { cats: "inv4-cats",  items: "inv4-items"  },
   { cats: "inv3-cats",  items: "inv3-items"  },
 ];
 
-// グローバルID
-export let gId = 400;
-export const nextId = () => ++gId;
+// グローバルID（カテゴリープレフィックスで一意にする）
+// kitchen:1000台, laundry:2000台, cosmetics:3000台, cat_xxx:動的
+let _gId = 9000; // デフォルトは9000台からスタート
+
+export const initGId = (maxExistingId) => {
+  if (maxExistingId >= _gId) _gId = maxExistingId + 1;
+};
+
+export const nextId = () => ++_gId;
 
 // 消費予測
 export function calcPrediction(item) {
