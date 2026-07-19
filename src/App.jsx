@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   DEFAULT_CATEGORIES, DEFAULT_ITEMS,
   STORAGE_CATS, STORAGE_ITEMS, LEGACY_KEYS,
-  nextId, calcPrediction,
+  nextId, initGId, calcPrediction,
 } from "./constants.js";
 import CSS from "./styles.js";
 import { ModalLayer } from "./components.jsx";
@@ -48,6 +48,10 @@ export default function App() {
       setCats(saved.cats);
       setItems(saved.items);
       setActiveTab("shop");
+      // 全アイテムのIDの最大値からgIdを初期化（重複防止）
+      const allIds = Object.values(saved.items).flat().map(i => Number(i.id) || 0);
+      const maxId  = allIds.length > 0 ? Math.max(...allIds) : 9000;
+      initGId(maxId);
     } else {
       setCats(DEFAULT_CATEGORIES);
       setItems(DEFAULT_ITEMS);
@@ -83,8 +87,14 @@ export default function App() {
   // ── カテゴリー操作 ────────────────────────────────────────────────
   const addCat = ({ label, icon, color }) => {
     const id = `cat_${Date.now()}`;
-    saveCats([...cats, { id, label, icon, color }]);
-    saveItems({ ...items, [id]: [] });
+    const newCats  = [...cats, { id, label, icon, color }];
+    const newItems = {};
+    // 既存カテゴリーのアイテムをそのままコピー
+    cats.forEach(c => { newItems[c.id] = items[c.id] || []; });
+    // 新カテゴリーは空配列
+    newItems[id] = [];
+    saveCats(newCats);
+    saveItems(newItems);
     setActiveTab(id); setModal(null); toast_("カテゴリーを追加しました");
   };
   const updateCat = (cat) => {
