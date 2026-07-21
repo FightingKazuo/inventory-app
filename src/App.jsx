@@ -40,6 +40,7 @@ export default function App() {
   const [editMode,  setEditMode]  = useState(false);
   const [modal,     setModal]     = useState(null);
   const [toast,     setToast]     = useState(null);
+  const [shopSnap,  setShopSnap]  = useState(null); // 買うものタブのスナップショット
 
   // ── 初期ロード ────────────────────────────────────────────────────
   useEffect(() => {
@@ -63,6 +64,21 @@ export default function App() {
   const saveCats  = (c) => { setCats(c);  try { localStorage.setItem(STORAGE_CATS,  JSON.stringify(c)); } catch {} };
   const saveItems = (i) => { setItems(i); try { localStorage.setItem(STORAGE_ITEMS, JSON.stringify(i)); } catch {} };
   const toast_    = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2400); };
+
+  // タブ切り替え：shopタブに入る前に最新の要購入リストをスナップショット
+  const switchTab = (tabId) => {
+    if (tabId === "shop") {
+      // スナップショットを更新してからタブ切り替え
+      const snap = cats.flatMap(cat =>
+        (items[cat.id] || [])
+          .filter(i => i.stock <= i.threshold)
+          .map(i => ({ ...i, cat, pred: calcPrediction(i) }))
+      );
+      setShopSnap(snap);
+    }
+    setActiveTab(tabId);
+    setEditMode(false);
+  };
 
   // ── 在庫操作 ──────────────────────────────────────────────────────
   const adjustStock = (catId, itemId, delta) => {
@@ -212,8 +228,9 @@ export default function App() {
   const soonItems = allItemsWithPred
     .filter(i => i.pred && i.pred.daysLeft <= SOON_DAYS)
     .sort((a, b) => a.pred.daysLeft - b.pred.daysLeft);
-  // 要購入アイテム（在庫 <= 購入目安）
-  const shopItems = allItemsWithPred.filter(i => i.stock <= i.threshold);
+  // 要購入アイテム: shopタブ表示中はスナップショット、それ以外はリアルタイム
+  const shopItemsLive = allItemsWithPred.filter(i => i.stock <= i.threshold);
+  const shopItems = activeTab === "shop" && shopSnap !== null ? shopSnap : shopItemsLive;
 
   // 通常タブのアイテム: 要購入 → そろそろ → 通常 の順にソート
   const sortActiveItems = (rawItems) =>
@@ -254,18 +271,18 @@ export default function App() {
           <div className="tabs">
             {/* 買うものタブ（常に表示） */}
             <button className={`tab shop-tab ${activeTab === "shop" ? "active" : ""}`}
-              onClick={() => { setActiveTab("shop"); setEditMode(false); }}>
-              🛒 買うもの{shopItems.length > 0 ? `（${shopItems.length}）` : ""}
+              onClick={() => switchTab("shop")}>
+              🛒 買うもの{shopItemsLive.length > 0 ? `（${shopItemsLive.length}）` : ""}
             </button>
             {soonItems.length > 0 && (
               <button className={`tab alert ${activeTab === "soon" ? "active" : ""}`}
-                onClick={() => { setActiveTab("soon"); setEditMode(false); }}>
+                onClick={() => switchTab("soon")}>
                 ⚠️ もうすぐ切れる
               </button>
             )}
             {cats.map(cat => (
               <button key={cat.id} className={`tab ${activeTab === cat.id ? "active" : ""}`}
-                onClick={() => { setActiveTab(cat.id); setEditMode(false); }}>
+                onClick={() => switchTab(cat.id)}>
                 {cat.icon} {cat.label}
               </button>
             ))}
@@ -314,6 +331,7 @@ export default function App() {
                         </div>
                         <button className="ctrl plus" onClick={() => adjustStock(catId, item.id, 1)}>＋</button>
                       </div>
+
                     </div>
                   );
                 })
