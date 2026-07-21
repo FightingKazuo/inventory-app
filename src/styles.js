@@ -87,6 +87,13 @@ body { background: #F7F4EF; }
 .icon-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .icon-opt { width: 40px; height: 40px; border-radius: 10px; border: 2px solid #EEE9E2; background: #F7F4EF; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
 .icon-opt.sel { border-color: #2D2926; background: white; }
+.icon-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; max-height: 240px; overflow-y: auto; }
+.icon-grid-opt { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 8px; border: 2px solid #EEE9E2; border-radius: 12px; background: #F7F4EF; cursor: pointer; transition: all 0.15s; }
+.icon-grid-opt.sel { border-color: #2D2926; background: white; }
+.icon-grid-opt:active { transform: scale(0.93); }
+.icon-grid-emoji { font-size: 22px; line-height: 1; }
+.icon-grid-label { font-size: 10px; color: #A89E94; font-family: 'Noto Sans JP', sans-serif; white-space: nowrap; }
+.icon-grid-opt.sel .icon-grid-label { color: #2D2926; }
 .color-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .color-opt { width: 30px; height: 30px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: all 0.15s; }
 .color-opt.sel { border-color: #2D2926; transform: scale(1.15); }
